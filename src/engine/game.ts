@@ -232,6 +232,12 @@ export function createGame(settings: Settings, onEvent?: GameEventHandler) {
 
     state.score = updateScore(state.score, result.clears);
 
+    // Full clear bonus: board is completely empty
+    const isBoardEmpty = state.board.every(row => row.every(cell => cell === null));
+    if (isBoardEmpty && result.clears > 0) {
+      state.score = { ...state.score, score: state.score.score + 50000 };
+    }
+
     state.activePiece = null;
     state.canHold = true;
 
