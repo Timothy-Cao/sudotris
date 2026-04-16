@@ -18,12 +18,13 @@ import {
   CELL_SIZE,
 } from './colors';
 
+const TOTAL_VISIBLE_ROWS = 21; // 18 playfield + 3 spawn zone
 export const CANVAS_WIDTH = BOARD_WIDTH * CELL_SIZE;
-export const CANVAS_HEIGHT = VISIBLE_HEIGHT * CELL_SIZE;
+export const CANVAS_HEIGHT = TOTAL_VISIBLE_ROWS * CELL_SIZE;
 
 function boardRowToCanvasY(row: number): number {
   // Row 0 = bottom of board = bottom of canvas
-  return (VISIBLE_HEIGHT - 1 - row) * CELL_SIZE;
+  return (TOTAL_VISIBLE_ROWS - 1 - row) * CELL_SIZE;
 }
 
 // Track whether to show numbers (set before each drawBoard call)
@@ -78,7 +79,7 @@ export function drawBoard(ctx: CanvasRenderingContext2D, state: GameState): void
   ctx.fillStyle = BOARD_BG;
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-  // Grid lines
+  // Grid lines (all 21 rows)
   ctx.strokeStyle = GRID_LINE;
   ctx.lineWidth = 1;
   for (let c = 1; c < BOARD_WIDTH; c++) {
@@ -87,15 +88,27 @@ export function drawBoard(ctx: CanvasRenderingContext2D, state: GameState): void
     ctx.lineTo(c * CELL_SIZE, CANVAS_HEIGHT);
     ctx.stroke();
   }
-  for (let r = 1; r < VISIBLE_HEIGHT; r++) {
+  for (let r = 1; r < TOTAL_VISIBLE_ROWS; r++) {
     ctx.beginPath();
     ctx.moveTo(0, r * CELL_SIZE);
     ctx.lineTo(CANVAS_WIDTH, r * CELL_SIZE);
     ctx.stroke();
   }
 
-  // Draw placed tiles (only visible rows 0-17)
-  for (let r = 0; r < VISIBLE_HEIGHT; r++) {
+  // Red dashed line at row 18 boundary (top of playfield / bottom of spawn zone)
+  const dangerLineY = boardRowToCanvasY(VISIBLE_HEIGHT - 1);
+  ctx.save();
+  ctx.strokeStyle = '#FF2222';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 6]);
+  ctx.beginPath();
+  ctx.moveTo(0, dangerLineY);
+  ctx.lineTo(CANVAS_WIDTH, dangerLineY);
+  ctx.stroke();
+  ctx.restore();
+
+  // Draw placed tiles (all 21 rows)
+  for (let r = 0; r < TOTAL_VISIBLE_ROWS; r++) {
     for (let c = 0; c < BOARD_WIDTH; c++) {
       const cell = board[r][c];
       if (cell) {
@@ -120,7 +133,7 @@ export function drawBoard(ctx: CanvasRenderingContext2D, state: GameState): void
     for (const tile of activePiece.tiles) {
       const r = ghostRow + tile.row;
       const c = activePiece.col + tile.col;
-      if (r >= 0 && r < VISIBLE_HEIGHT && c >= 0 && c < BOARD_WIDTH) {
+      if (r >= 0 && r < TOTAL_VISIBLE_ROWS && c >= 0 && c < BOARD_WIDTH) {
         const cx = c * CELL_SIZE;
         const cy = boardRowToCanvasY(r);
         drawTileAt(ctx, cx, cy, tile.color, GHOST_ALPHA);
@@ -133,7 +146,7 @@ export function drawBoard(ctx: CanvasRenderingContext2D, state: GameState): void
     for (const tile of activePiece.tiles) {
       const r = activePiece.row + tile.row;
       const c = activePiece.col + tile.col;
-      if (r >= 0 && r < VISIBLE_HEIGHT && c >= 0 && c < BOARD_WIDTH) {
+      if (r >= 0 && r < TOTAL_VISIBLE_ROWS && c >= 0 && c < BOARD_WIDTH) {
         const cx = c * CELL_SIZE;
         const cy = boardRowToCanvasY(r);
         drawTileAt(ctx, cx, cy, tile.color);
@@ -196,4 +209,46 @@ export function drawNextPieces(
     });
     ctx.globalAlpha = 1;
   });
+}
+
+export function drawHoldPiece(
+  ctx: CanvasRenderingContext2D,
+  piece: { type: PieceType; colors: TileColor[] } | null,
+  canHold: boolean
+): void {
+  const width = ctx.canvas.width;
+  const height = ctx.canvas.height;
+
+  ctx.fillStyle = BOARD_BG;
+  ctx.fillRect(0, 0, width, height);
+
+  if (!piece) return;
+
+  const offsets = PIECE_SHAPES[piece.type][0];
+  let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
+  for (const [r, c] of offsets) {
+    minR = Math.min(minR, r); maxR = Math.max(maxR, r);
+    minC = Math.min(minC, c); maxC = Math.max(maxC, c);
+  }
+
+  const pieceW = (maxC - minC + 1) * PREVIEW_CELL;
+  const pieceH = (maxR - minR + 1) * PREVIEW_CELL;
+  const offsetX = (width - pieceW) / 2;
+  const offsetY = (height - pieceH) / 2;
+  const alpha = canHold ? 1 : 0.35;
+
+  offsets.forEach((offset: [number, number], i: number) => {
+    const [r, c] = offset;
+    const cx = offsetX + (c - minC) * PREVIEW_CELL;
+    const cy = offsetY + (maxR - r) * PREVIEW_CELL;
+    const color = piece.colors[i];
+
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = TILE_COLORS[color];
+    ctx.fillRect(cx + 1, cy + 1, PREVIEW_CELL - 2, PREVIEW_CELL - 2);
+    ctx.strokeStyle = TILE_BORDER_COLORS[color];
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(cx + 1, cy + 1, PREVIEW_CELL - 2, PREVIEW_CELL - 2);
+  });
+  ctx.globalAlpha = 1;
 }

@@ -6,6 +6,7 @@ import { useGame } from '../hooks/useGame';
 import { useSettings, getBestScore, setBestScore } from '../hooks/useSettings';
 import GameCanvas from '../components/GameCanvas';
 import NextPiecePreview from '../components/NextPiecePreview';
+import HoldPiecePreview from '../components/HoldPiecePreview';
 import Timer from '../components/Timer';
 import ScoreDisplay from '../components/ScoreDisplay';
 
@@ -23,8 +24,9 @@ function getTodayDisplay(): string {
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewRef = useRef<HTMLCanvasElement>(null);
+  const holdCanvasRef = useRef<HTMLCanvasElement>(null);
   const { settings, loaded } = useSettings();
-  const { gameState, start, restart } = useGame(canvasRef, previewRef, settings);
+  const { gameState, start, restart } = useGame(canvasRef, previewRef, holdCanvasRef, settings);
 
   if (!loaded || !gameState) {
     return (
@@ -54,6 +56,7 @@ export default function Home() {
       <div className="flex gap-6 items-start">
         {/* Left panel: Next piece */}
         <div className="flex flex-col gap-4 w-32 items-center">
+          <HoldPiecePreview ref={holdCanvasRef} canHold={gameState.canHold} />
           <NextPiecePreview ref={previewRef} />
         </div>
 

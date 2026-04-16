@@ -35,6 +35,8 @@ export function createGame(dateStr: string, settings: Settings) {
     activePiece: null,
     ghostRow: null,
     nextPieces: [],
+    holdPiece: null,
+    canHold: true,
     phase: 'menu',
     score: createScoreState(),
     timeRemaining: GAME_DURATION,
@@ -88,6 +90,50 @@ export function createGame(dateStr: string, settings: Settings) {
     return true;
   }
 
+  function holdCurrentPiece(): void {
+    if (!state.activePiece || !state.canHold) return;
+    const current = state.activePiece;
+    const currentColors = current.tiles.map(t => t.color);
+
+    if (state.holdPiece) {
+      // Swap: spawn the held piece, hold the current one
+      const held = state.holdPiece;
+      state.holdPiece = { type: current.type, colors: currentColors };
+
+      // Spawn the held piece
+      const spawnRow = getSpawnRow(held.type);
+      const spawnCol = getSpawnCol(held.type);
+      const shapeOffsets = PIECE_SHAPES[held.type][0];
+      const tiles: PieceTile[] = shapeOffsets.map((offset, i) => ({
+        row: offset[0],
+        col: offset[1],
+        color: held.colors[i],
+      }));
+      const tileOffsets = tiles.map(t => [t.row, t.col] as [number, number]);
+
+      if (!isValidPosition(state.board, tileOffsets, spawnRow, spawnCol)) {
+        state.phase = 'gameover';
+        return;
+      }
+
+      state.activePiece = { type: held.type, tiles, rotation: 0, row: spawnRow, col: spawnCol };
+      state.ghostRow = getGhostRow(state.board, state.activePiece);
+    } else {
+      // No held piece — hold current, spawn next from bag
+      state.holdPiece = { type: current.type, colors: currentColors };
+      state.activePiece = null;
+      if (!spawnPiece()) {
+        state.phase = 'gameover';
+        return;
+      }
+    }
+
+    state.canHold = false;
+    state.lockDelay = { active: false, timer: 0, resets: 0 };
+    gravityAccumulator = 0;
+    lastActionWasRotation = false;
+  }
+
   function start(): void {
     // Fresh bag from seed
     const freshRng = createRng(seed);
@@ -103,6 +149,8 @@ export function createGame(dateStr: string, settings: Settings) {
       activePiece: null,
       ghostRow: null,
       nextPieces: [],
+      holdPiece: null,
+      canHold: true,
       phase: 'playing',
       score: createScoreState(),
       timeRemaining: GAME_DURATION,
@@ -236,6 +284,7 @@ export function createGame(dateStr: string, settings: Settings) {
     state.score = updateScore(state.score, result.linesCleared, tSpin);
 
     state.activePiece = null;
+    state.canHold = true; // reset hold lock on piece lock
 
     // Spawn next piece
     if (!spawnPiece()) {
@@ -276,6 +325,9 @@ export function createGame(dateStr: string, settings: Settings) {
         }
         return;
       case 'softDrop':
+        return;
+      case 'hold':
+        holdCurrentPiece();
         return;
     }
 
@@ -370,7 +422,7 @@ export function createGame(dateStr: string, settings: Settings) {
     if (state.phase !== 'playing') return;
 
     // Immediate actions (not DAS/ARR controlled)
-    if (action === 'rotateCW' || action === 'rotateCCW' || action === 'rotate180' || action === 'hardDrop') {
+    if (action === 'rotateCW' || action === 'rotateCCW' || action === 'rotate180' || action === 'hardDrop' || action === 'hold') {
       handleAction(action);
     } else {
       inputProcessor.keyDown(action);
@@ -389,6 +441,7 @@ export function createGame(dateStr: string, settings: Settings) {
       score: { ...state.score },
       lockDelay: { ...state.lockDelay },
       nextPieces: state.nextPieces.map(p => ({ ...p, colors: [...p.colors] })),
+      holdPiece: state.holdPiece ? { ...state.holdPiece, colors: [...state.holdPiece.colors] } : null,
     };
   }
 

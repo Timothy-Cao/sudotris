@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { createGame, Game } from '../engine/game';
-import { drawBoard, drawNextPieces, setShowNumbers } from '../renderer/canvas';
+import { drawBoard, drawNextPieces, drawHoldPiece, setShowNumbers } from '../renderer/canvas';
 import { Settings, GameState, InputAction, GamePhase } from '../engine/types';
 
 function getTodayDateStr(): string {
@@ -16,6 +16,7 @@ function getTodayDateStr(): string {
 export function useGame(
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
   previewRef: React.RefObject<HTMLCanvasElement | null>,
+  holdRef: React.RefObject<HTMLCanvasElement | null>,
   settings: Settings
 ) {
   const gameRef = useRef<Game | null>(null);
@@ -83,6 +84,13 @@ export function useGame(
         if (pctx) drawNextPieces(pctx, state.nextPieces);
       }
 
+      // Draw hold piece
+      const hold = holdRef.current;
+      if (hold) {
+        const hctx = hold.getContext('2d');
+        if (hctx) drawHoldPiece(hctx, state.holdPiece, state.canHold);
+      }
+
       if (state.phase === 'playing') {
         animFrameRef.current = requestAnimationFrame(loop);
       } else {
@@ -92,7 +100,7 @@ export function useGame(
     }
 
     animFrameRef.current = requestAnimationFrame(loop);
-  }, [canvasRef, previewRef]);
+  }, [canvasRef, previewRef, holdRef]);
 
   // Keyboard input
   useEffect(() => {
@@ -106,6 +114,12 @@ export function useGame(
 
       const game = gameRef.current;
       if (!game || game.getState().phase !== 'playing') return;
+
+      // Suppress browser shortcuts while playing (Cmd+R, Cmd+L, etc.)
+      // Can't suppress Cmd+Q/Cmd+W/Fn but most others work
+      if (e.metaKey || e.ctrlKey || e.altKey) {
+        e.preventDefault();
+      }
 
       const action = keyMapRef.current.get(e.code);
       if (action) {

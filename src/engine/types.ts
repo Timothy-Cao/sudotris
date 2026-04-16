@@ -44,7 +44,8 @@ export type InputAction =
   | 'rotateCCW'
   | 'rotate180'
   | 'hardDrop'
-  | 'softDrop';
+  | 'softDrop'
+  | 'hold';
 
 // Key bindings: action -> KeyboardEvent.code string
 export type KeyBindings = Record<InputAction, string>;
@@ -89,6 +90,8 @@ export interface GameState {
   activePiece: ActivePiece | null;
   ghostRow: number | null;
   nextPieces: { type: PieceType; colors: TileColor[] }[];
+  holdPiece: { type: PieceType; colors: TileColor[] } | null;
+  canHold: boolean; // false after holding, reset on next piece lock
   phase: GamePhase;
   score: ScoreState;
   timeRemaining: number;
@@ -105,6 +108,7 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   rotate180: 'KeyA',
   hardDrop: 'Space',
   softDrop: 'ArrowDown',
+  hold: 'ShiftLeft',
 };
 
 export const DEFAULT_HANDLING: HandlingConfig = {
@@ -116,7 +120,7 @@ export const DEFAULT_HANDLING: HandlingConfig = {
 export const DEFAULT_SETTINGS: Settings = {
   keyBindings: DEFAULT_KEY_BINDINGS,
   handling: DEFAULT_HANDLING,
-  showNumbers: false,
+  showNumbers: true,
 };
 
 // Game constants

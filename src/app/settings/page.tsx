@@ -20,6 +20,7 @@ const ACTION_LABELS: Record<InputAction, string> = {
   rotate180: 'Rotate 180',
   hardDrop: 'Hard Drop',
   softDrop: 'Soft Drop',
+  hold: 'Hold',
 };
 
 const ACTION_ORDER: InputAction[] = [
@@ -30,6 +31,7 @@ const ACTION_ORDER: InputAction[] = [
   'rotateCW',
   'rotateCCW',
   'rotate180',
+  'hold',
 ];
 
 function formatKeyCode(code: string): string {
