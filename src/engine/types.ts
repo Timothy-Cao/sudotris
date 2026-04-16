@@ -4,8 +4,9 @@ export type PieceType = 'I' | 'O' | 'T' | 'S' | 'Z' | 'J' | 'L';
 // Rotation states (SRS standard): 0=spawn, 1=R(CW), 2=180, 3=L(CCW)
 export type RotationState = 0 | 1 | 2 | 3;
 
-// Color values 1-6 (also the displayed number)
-export type TileColor = 1 | 2 | 3 | 4 | 5 | 6;
+// Color values 1-8
+export type TileColor = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+export const NUM_COLORS = 8;
 
 // A cell on the board
 export type Cell = { color: TileColor } | null;
@@ -83,7 +84,7 @@ export interface LockDelayState {
 // Full game state (read by renderer)
 export interface GameState {
   board: Board;
-  lockedRows: Set<number>;
+  lockedRowCount: number; // gray inert rows stacked at the bottom
   activePiece: ActivePiece | null;
   ghostRow: number | null;
   nextPiece: { type: PieceType; colors: TileColor[] } | null;

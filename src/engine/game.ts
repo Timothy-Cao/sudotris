@@ -31,7 +31,7 @@ export function createGame(dateStr: string, settings: Settings) {
 
   let state: GameState = {
     board: createBoard(),
-    lockedRows: new Set(),
+    lockedRowCount: 0,
     activePiece: null,
     ghostRow: null,
     nextPiece: null,
@@ -99,7 +99,7 @@ export function createGame(dateStr: string, settings: Settings) {
 
     state = {
       board: createBoard(),
-      lockedRows: new Set(),
+      lockedRowCount: 0,
       activePiece: null,
       ghostRow: null,
       nextPiece: null,
@@ -153,14 +153,16 @@ export function createGame(dateStr: string, settings: Settings) {
       const newRow = piece.row + dy;
 
       if (isValidPosition(state.board, newShapeOffsets, newRow, newCol)) {
-        // Update tile positions. Since PIECE_SHAPES maintains consistent
-        // index ordering across rotation states, tile[i] in the new state
-        // is the same physical block as tile[i] in the old state.
-        // Colors stay bound to their index automatically.
+        // Cycle colors on rotation so even identical shapes (O-piece) rotate colors.
+        // CW: shift colors forward by 1, CCW: back by 1, 180: by 2.
+        const colorShift = direction === 'cw' ? 1 : direction === 'ccw' ? 3 : 2;
+        const n = piece.tiles.length;
+        const oldColors = piece.tiles.map(t => t.color);
+
         const newTiles: PieceTile[] = newShapeOffsets.map((offset, i) => ({
           row: offset[0],
           col: offset[1],
-          color: piece.tiles[i].color,
+          color: oldColors[(i + colorShift) % n],
         }));
 
         piece.tiles = newTiles;
@@ -198,9 +200,9 @@ export function createGame(dateStr: string, settings: Settings) {
     }
 
     // Evaluate lines
-    const result = evaluateLines(state.board, state.lockedRows);
+    const result = evaluateLines(state.board, state.lockedRowCount);
     state.board = result.board;
-    state.lockedRows = result.lockedRows;
+    state.lockedRowCount = result.lockedRowCount;
     state.score = updateScore(state.score, result.linesCleared);
 
     state.activePiece = null;
@@ -349,7 +351,6 @@ export function createGame(dateStr: string, settings: Settings) {
     return {
       ...state,
       board: state.board.map(row => [...row]),
-      lockedRows: new Set(state.lockedRows),
       activePiece: state.activePiece ? { ...state.activePiece, tiles: [...state.activePiece.tiles] } : null,
       score: { ...state.score },
       lockDelay: { ...state.lockDelay },

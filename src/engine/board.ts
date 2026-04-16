@@ -16,7 +16,6 @@ export function createBoard(): Board {
   return board;
 }
 
-// Check if all tiles at absolute positions are in bounds and unoccupied
 export function isValidPosition(
   board: Board,
   tileOffsets: [number, number][],
@@ -32,7 +31,6 @@ export function isValidPosition(
   return true;
 }
 
-// Place piece tiles onto board, return new board
 export function lockPiece(board: Board, piece: ActivePiece): Board {
   const newBoard = board.map(row => [...row]);
   for (const tile of piece.tiles) {
@@ -45,74 +43,65 @@ export function lockPiece(board: Board, piece: ActivePiece): Board {
   return newBoard;
 }
 
-// Evaluate lines after a piece locks
+// Gray cell marker — color 0 is not a valid TileColor, so we use a sentinel.
+// A "locked" (gray) cell is represented as { color: 0 as TileColor }.
+export const GRAY_CELL: Cell = { color: 0 as TileColor };
+
+export function isGrayCell(cell: Cell): boolean {
+  return cell !== null && (cell.color as number) === 0;
+}
+
+function makeGrayRow(): Cell[] {
+  return new Array(BOARD_WIDTH).fill(null).map(() => ({ color: 0 as TileColor }));
+}
+
+// Evaluate lines after a piece locks.
+// lockedRowCount = number of gray rows at the bottom.
 export function evaluateLines(
   board: Board,
-  lockedRows: Set<number>
-): { board: Board; lockedRows: Set<number>; linesCleared: number } {
+  lockedRowCount: number
+): { board: Board; lockedRowCount: number; linesCleared: number } {
   const newBoard = board.map(row => [...row]);
-  const newLocked = new Set(lockedRows);
 
-  // Step 1: identify full rows and classify them
+  // Step 1: identify full rows above the locked zone
   const clearRows: number[] = [];
-  const penaltyRows: number[] = [];
+  let penaltyCount = 0;
 
-  for (let r = 0; r < VISIBLE_HEIGHT; r++) {
-    if (newLocked.has(r)) continue; // locked rows can never be cleared
+  for (let r = lockedRowCount; r < VISIBLE_HEIGHT; r++) {
     if (isRowFull(newBoard, r)) {
       if (hasUniqueColors(newBoard, r)) {
         clearRows.push(r);
       } else {
-        penaltyRows.push(r);
+        penaltyCount++;
       }
     }
   }
 
-  // Step 2: remove clear rows (process from top to avoid index shifting issues)
-  // Sort descending so we remove from top first
+  // Step 2: remove clear rows (top-down to keep indices stable)
   const sortedClears = [...clearRows].sort((a, b) => b - a);
   for (const r of sortedClears) {
-    // Remove this row
     newBoard.splice(r, 1);
-    // Add empty row at top
     newBoard.push(new Array<Cell>(BOARD_WIDTH).fill(null));
-
-    // Update locked row indices: rows above the removed row shift down by 1
-    const updatedLocked = new Set<number>();
-    for (const lr of newLocked) {
-      if (lr < r) {
-        updatedLocked.add(lr);
-      } else if (lr > r) {
-        updatedLocked.add(lr - 1);
-      }
-      // lr === r: this locked row was cleared (shouldn't happen since locked rows
-      // can't be cleared, but if a clear row was also locked, it gets removed)
-    }
-    newLocked.clear();
-    for (const lr of updatedLocked) newLocked.add(lr);
-
-    // Also shift penalty row indices that were above the removed row
-    for (let i = 0; i < penaltyRows.length; i++) {
-      if (penaltyRows[i] > r) penaltyRows[i]--;
-    }
   }
 
-  // Step 3: mark penalty rows as locked (after shift)
-  for (const r of penaltyRows) {
-    // Re-check that this row is still full after shifts
-    if (r < VISIBLE_HEIGHT && isRowFull(newBoard, r)) {
-      newLocked.add(r);
-    }
+  // Step 3: for each penalty, insert a gray row at the bottom (row 0)
+  // and push everything up by 1. This shrinks playable space from below.
+  let newLockedCount = lockedRowCount;
+  for (let p = 0; p < penaltyCount; p++) {
+    // Remove the topmost row (it falls off)
+    newBoard.pop();
+    // Insert gray row at position 0
+    newBoard.splice(0, 0, makeGrayRow());
+    newLockedCount++;
   }
 
   return {
     board: newBoard,
-    lockedRows: newLocked,
+    lockedRowCount: newLockedCount,
     linesCleared: clearRows.length,
   };
 }
 
-// Get the ghost row (lowest valid position directly below)
 export function getGhostRow(
   board: Board,
   piece: ActivePiece
@@ -137,6 +126,7 @@ function hasUniqueColors(board: Board, row: number): boolean {
   for (let c = 0; c < BOARD_WIDTH; c++) {
     const cell = board[row][c];
     if (cell === null) return false;
+    if (isGrayCell(cell)) return false; // gray cells don't count as colored
     colors.add(cell.color);
   }
   return colors.size === BOARD_WIDTH;

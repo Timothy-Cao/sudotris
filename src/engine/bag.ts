@@ -1,5 +1,5 @@
 import { Rng } from './rng';
-import { PieceType, TileColor } from './types';
+import { PieceType, TileColor, NUM_COLORS } from './types';
 import { getRowMajorTiles } from './pieces';
 
 export interface BagPiece {
@@ -20,7 +20,7 @@ export function createBag(rng: Rng) {
   function generatePiece(): BagPiece {
     if (queue.length === 0) refill();
     const type = queue.shift()!;
-    const allColors: TileColor[] = [1, 2, 3, 4, 5, 6];
+    const allColors: TileColor[] = Array.from({ length: NUM_COLORS }, (_, i) => (i + 1) as TileColor);
     // Sample 4 unique colors
     const colors = rng.sampleWithout(allColors, 4) as TileColor[];
     // Colors map to tiles in row-major order of the spawn rotation (state 0)

@@ -6,12 +6,13 @@ import {
   VISIBLE_HEIGHT,
 } from '../engine/types';
 import { getRowMajorTiles } from '../engine/pieces';
+import { isGrayCell } from '../engine/board';
 import {
   TILE_COLORS,
   TILE_BORDER_COLORS,
   GHOST_ALPHA,
-  LOCKED_OVERLAY,
-  LOCKED_STRIPE,
+  LOCKED_ROW_COLOR,
+  LOCKED_ROW_BORDER,
   BOARD_BG,
   GRID_LINE,
   CELL_SIZE,
@@ -46,18 +47,11 @@ function drawTileAt(
   ctx.lineWidth = 2;
   ctx.strokeRect(canvasX + 1, canvasY + 1, CELL_SIZE - 2, CELL_SIZE - 2);
 
-  // Number
-  ctx.fillStyle = alpha < 1 ? `rgba(255,255,255,${alpha * 0.8})` : 'rgba(255,255,255,0.9)';
-  ctx.font = `bold ${Math.floor(CELL_SIZE * 0.45)}px monospace`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(String(color), canvasX + CELL_SIZE / 2, canvasY + CELL_SIZE / 2);
-
   ctx.globalAlpha = 1;
 }
 
 export function drawBoard(ctx: CanvasRenderingContext2D, state: GameState): void {
-  const { board, lockedRows, activePiece, ghostRow } = state;
+  const { board, activePiece, ghostRow } = state;
 
   // Clear
   ctx.fillStyle = BOARD_BG;
@@ -86,26 +80,17 @@ export function drawBoard(ctx: CanvasRenderingContext2D, state: GameState): void
       if (cell) {
         const cx = c * CELL_SIZE;
         const cy = boardRowToCanvasY(r);
-        drawTileAt(ctx, cx, cy, cell.color);
+        if (isGrayCell(cell)) {
+          // Gray locked cell
+          ctx.fillStyle = LOCKED_ROW_COLOR;
+          ctx.fillRect(cx + 1, cy + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+          ctx.strokeStyle = LOCKED_ROW_BORDER;
+          ctx.lineWidth = 2;
+          ctx.strokeRect(cx + 1, cy + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+        } else {
+          drawTileAt(ctx, cx, cy, cell.color);
+        }
       }
-    }
-  }
-
-  // Draw locked row overlay
-  for (const r of lockedRows) {
-    if (r >= VISIBLE_HEIGHT) continue;
-    const cy = boardRowToCanvasY(r);
-    ctx.fillStyle = LOCKED_OVERLAY;
-    ctx.fillRect(0, cy, CANVAS_WIDTH, CELL_SIZE);
-
-    // Diagonal stripes
-    ctx.strokeStyle = LOCKED_STRIPE;
-    ctx.lineWidth = 2;
-    for (let x = -CELL_SIZE; x < CANVAS_WIDTH + CELL_SIZE; x += 8) {
-      ctx.beginPath();
-      ctx.moveTo(x, cy);
-      ctx.lineTo(x + CELL_SIZE, cy + CELL_SIZE);
-      ctx.stroke();
     }
   }
 
@@ -182,11 +167,5 @@ export function drawNextPiece(
     ctx.strokeStyle = TILE_BORDER_COLORS[color];
     ctx.lineWidth = 1.5;
     ctx.strokeRect(cx + 1, cy + 1, PREVIEW_CELL - 2, PREVIEW_CELL - 2);
-
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.font = `bold ${Math.floor(PREVIEW_CELL * 0.45)}px monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(String(color), cx + PREVIEW_CELL / 2, cy + PREVIEW_CELL / 2);
   });
 }
