@@ -19,7 +19,7 @@ import {
 import { createRng, dateSeed, Rng } from './rng';
 import { createBoard, isValidPosition, lockPiece, evaluateLines, getGhostRow } from './board';
 import { createBag, Bag } from './bag';
-import { PIECE_SHAPES, getKicks, getSpawnCol, getSpawnRow, getRowMajorTiles } from './pieces';
+import { PIECE_SHAPES, getKicks, getSpawnCol, getSpawnRow } from './pieces';
 import { createScoreState, updateScore } from './scoring';
 import { createInputProcessor, InputProcessor } from './input';
 
@@ -50,9 +50,10 @@ export function createGame(dateStr: string, settings: Settings) {
     const spawnRow = getSpawnRow(type);
     const spawnCol = getSpawnCol(type);
 
-    // Assign colors to tiles in row-major order
-    const rowMajorOffsets = getRowMajorTiles(type, 0);
-    const tiles: PieceTile[] = rowMajorOffsets.map((offset, i) => ({
+    // Assign colors to tiles by their index in PIECE_SHAPES.
+    // Index is stable across rotation states, so colors follow their physical block.
+    const shapeOffsets = PIECE_SHAPES[type][0];
+    const tiles: PieceTile[] = shapeOffsets.map((offset, i) => ({
       row: offset[0],
       col: offset[1],
       color: colors[i],
@@ -88,12 +89,13 @@ export function createGame(dateStr: string, settings: Settings) {
   }
 
   function start(): void {
-    // Reset everything
-    const newRng = createRng(seed);
-    const newBag = createBag(newRng);
-    // We need to re-assign since bag is const — restructure:
-    // Actually let's rebuild state properly
-    Object.assign(bag, newBag);
+    // Fresh bag from seed
+    const freshRng = createRng(seed);
+    const freshBag = createBag(freshRng);
+    Object.assign(bag, freshBag);
+
+    // Reset input processor (clear stale DAS/ARR key states)
+    inputProcessor.reset();
 
     state = {
       board: createBoard(),
@@ -108,11 +110,6 @@ export function createGame(dateStr: string, settings: Settings) {
       softDropping: false,
     };
     gravityAccumulator = 0;
-
-    // Need fresh bag — recreate from seed
-    const freshRng = createRng(seed);
-    const freshBag = createBag(freshRng);
-    Object.assign(bag, freshBag);
 
     if (!spawnPiece()) {
       state.phase = 'gameover';
@@ -156,21 +153,11 @@ export function createGame(dateStr: string, settings: Settings) {
       const newRow = piece.row + dy;
 
       if (isValidPosition(state.board, newShapeOffsets, newRow, newCol)) {
-        // Build new tiles preserving color assignment
-        // Colors are bound to their position in the original row-major order
-        // We need to map from old tile positions to new tile positions
-        const newRowMajor = getRowMajorTiles(piece.type, to);
-        const oldRowMajor = getRowMajorTiles(piece.type, from);
-
-        // Colors stay with their index in the original spawn ordering
-        // Since tiles were assigned in row-major order at spawn,
-        // and we track which color goes with which "logical" tile,
-        // we need to maintain the color-to-logical-tile mapping.
-        //
-        // The simplest approach: colors are assigned by index at spawn.
-        // Tile index 0 always has color[0], tile index 1 has color[1], etc.
-        // The shapes already define tiles in a consistent order per rotation.
-        const newTiles: PieceTile[] = newRowMajor.map((offset, i) => ({
+        // Update tile positions. Since PIECE_SHAPES maintains consistent
+        // index ordering across rotation states, tile[i] in the new state
+        // is the same physical block as tile[i] in the old state.
+        // Colors stay bound to their index automatically.
+        const newTiles: PieceTile[] = newShapeOffsets.map((offset, i) => ({
           row: offset[0],
           col: offset[1],
           color: piece.tiles[i].color,
@@ -291,27 +278,39 @@ export function createGame(dateStr: string, settings: Settings) {
     state.softDropping = inputProcessor.isSoftDropping();
 
     // Gravity
-    const gravityInterval = state.softDropping
-      ? (settings.handling.sdf === Infinity ? 0 : GRAVITY_INTERVAL / settings.handling.sdf)
-      : GRAVITY_INTERVAL;
-
-    gravityAccumulator += dt;
-
-    while (gravityAccumulator >= gravityInterval && state.activePiece) {
-      gravityAccumulator -= gravityInterval;
-
-      if (canMoveDown()) {
-        tryMove(-1, 0);
-        // If piece can now rest, don't start lock delay yet — wait for next gravity tick
-        if (!canMoveDown() && !state.lockDelay.active) {
-          state.lockDelay.active = true;
-          state.lockDelay.timer = 0;
+    if (state.softDropping && settings.handling.sdf === Infinity) {
+      // Instant soft drop: move piece all the way down
+      if (state.activePiece) {
+        while (canMoveDown()) {
+          tryMove(-1, 0);
         }
-      } else {
-        // Can't move down — activate lock delay if not already
         if (!state.lockDelay.active) {
           state.lockDelay.active = true;
           state.lockDelay.timer = 0;
+        }
+      }
+      gravityAccumulator = 0;
+    } else {
+      const gravityInterval = state.softDropping
+        ? GRAVITY_INTERVAL / settings.handling.sdf
+        : GRAVITY_INTERVAL;
+
+      gravityAccumulator += dt;
+
+      while (gravityAccumulator >= gravityInterval && state.activePiece) {
+        gravityAccumulator -= gravityInterval;
+
+        if (canMoveDown()) {
+          tryMove(-1, 0);
+          if (!canMoveDown() && !state.lockDelay.active) {
+            state.lockDelay.active = true;
+            state.lockDelay.timer = 0;
+          }
+        } else {
+          if (!state.lockDelay.active) {
+            state.lockDelay.active = true;
+            state.lockDelay.timer = 0;
+          }
         }
       }
     }
@@ -347,7 +346,15 @@ export function createGame(dateStr: string, settings: Settings) {
   }
 
   function getState(): GameState {
-    return { ...state };
+    return {
+      ...state,
+      board: state.board.map(row => [...row]),
+      lockedRows: new Set(state.lockedRows),
+      activePiece: state.activePiece ? { ...state.activePiece, tiles: [...state.activePiece.tiles] } : null,
+      score: { ...state.score },
+      lockDelay: { ...state.lockDelay },
+      nextPiece: state.nextPiece ? { ...state.nextPiece, colors: [...state.nextPiece.colors] } : null,
+    };
   }
 
   function updateSettings(newSettings: Settings): void {

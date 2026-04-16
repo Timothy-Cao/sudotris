@@ -84,7 +84,10 @@ export function createInputProcessor(handling: HandlingConfig) {
       } else {
         // DAS charged, apply ARR
         if (handling.arr === 0) {
-          // Already handled on charge
+          // Instant: push enough moves to teleport to wall every frame
+          for (let i = 0; i < 20; i++) {
+            pendingActions.push(action);
+          }
         } else {
           state.arrAccumulator += dt;
           while (state.arrAccumulator >= handling.arr) {
@@ -111,7 +114,12 @@ export function createInputProcessor(handling: HandlingConfig) {
     handling = newHandling;
   }
 
-  return { keyDown, keyUp, update, getActions, isSoftDropping, updateHandling };
+  function reset(): void {
+    keyStates.clear();
+    pendingActions.length = 0;
+  }
+
+  return { keyDown, keyUp, update, getActions, isSoftDropping, updateHandling, reset };
 }
 
 export type InputProcessor = ReturnType<typeof createInputProcessor>;

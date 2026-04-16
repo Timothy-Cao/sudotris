@@ -58,6 +58,7 @@ export function evaluateLines(
   const penaltyRows: number[] = [];
 
   for (let r = 0; r < VISIBLE_HEIGHT; r++) {
+    if (newLocked.has(r)) continue; // locked rows can never be cleared
     if (isRowFull(newBoard, r)) {
       if (hasUniqueColors(newBoard, r)) {
         clearRows.push(r);
