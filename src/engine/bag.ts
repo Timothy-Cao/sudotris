@@ -19,8 +19,10 @@ export function createBag(rng: Rng) {
   function generatePiece(): BagPiece {
     if (queue.length === 0) refill();
     const type = queue.shift()!;
-    const allColors: TileColor[] = Array.from({ length: NUM_COLORS }, (_, i) => (i + 1) as TileColor);
-    const colors = rng.sampleWithout(allColors, 4) as TileColor[];
+    // Fully random colors (with replacement)
+    const colors: TileColor[] = Array.from({ length: 4 }, () =>
+      (Math.floor(rng.next() * NUM_COLORS) + 1) as TileColor
+    );
     return { type, colors };
   }
 

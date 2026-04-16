@@ -10,6 +10,7 @@ import {
   LOCK_DELAY,
   MAX_LOCK_RESETS,
   TileColor,
+  PieceType,
   RotationState,
   Settings,
 } from './types';
@@ -145,6 +146,93 @@ export function createGame(settings: Settings, onEvent?: GameEventHandler) {
     return false;
   }
 
+  // Rotate colors by placing them on a grid, geometrically rotating,
+  // then mapping back to the new SRS positions.
+  function computeRotatedColors(
+    tiles: PieceTile[],
+    newOffsets: [number, number][],
+    direction: 'cw' | 'ccw' | '180',
+    type: PieceType
+  ): TileColor[] {
+    const S = type === 'I' ? 4 : type === 'O' ? 2 : 3;
+
+    // Place colors on a local grid
+    const grid = new Map<string, TileColor>();
+    for (const t of tiles) grid.set(`${t.row},${t.col}`, t.color);
+
+    // Rotate each position geometrically
+    // CW (y-up): (r,c) → (S-1-c, r)
+    // CCW: (r,c) → (c, S-1-r)
+    // 180: (r,c) → (S-1-r, S-1-c)
+    const rotated: { r: number; c: number; color: TileColor }[] = [];
+    for (const [key, color] of grid) {
+      const [r, c] = key.split(',').map(Number);
+      let nr: number, nc: number;
+      if (direction === 'cw') { nr = S - 1 - c; nc = r; }
+      else if (direction === 'ccw') { nr = c; nc = S - 1 - r; }
+      else { nr = S - 1 - r; nc = S - 1 - c; }
+      rotated.push({ r: nr, c: nc, color });
+    }
+
+    // Find the integer offset that best aligns rotated positions to SRS positions
+    let bestDr = 0, bestDc = 0, bestMatches = -1;
+    const tried = new Set<string>();
+    for (const rp of rotated) {
+      for (const [sr, sc] of newOffsets) {
+        const dr = sr - rp.r, dc = sc - rp.c;
+        const key = `${dr},${dc}`;
+        if (tried.has(key)) continue;
+        tried.add(key);
+        let matches = 0;
+        for (const rp2 of rotated) {
+          if (newOffsets.some(([r, c]) => r === rp2.r + dr && c === rp2.c + dc)) matches++;
+        }
+        if (matches > bestMatches) { bestMatches = matches; bestDr = dr; bestDc = dc; }
+      }
+    }
+
+    // Build shifted rotated map
+    const shifted = new Map<string, TileColor>();
+    const usedKeys = new Set<string>();
+    for (const rp of rotated) shifted.set(`${rp.r + bestDr},${rp.c + bestDc}`, rp.color);
+
+    // Assign: exact matches first, then nearest for remaining
+    const result: (TileColor | null)[] = newOffsets.map(() => null);
+    const usedRotated = new Set<number>();
+
+    // Pass 1: exact matches
+    for (let i = 0; i < newOffsets.length; i++) {
+      const key = `${newOffsets[i][0]},${newOffsets[i][1]}`;
+      if (shifted.has(key)) {
+        result[i] = shifted.get(key)!;
+        usedKeys.add(key);
+        // Mark which rotated entry was used
+        const ri = rotated.findIndex(rp => `${rp.r + bestDr},${rp.c + bestDc}` === key && !usedRotated.has(rotated.indexOf(rp)));
+        if (ri >= 0) usedRotated.add(ri);
+      }
+    }
+
+    // Pass 2: unmatched → nearest unused rotated
+    for (let i = 0; i < result.length; i++) {
+      if (result[i] !== null) continue;
+      const [tr, tc] = newOffsets[i];
+      let bestIdx = -1, bestDist = Infinity;
+      for (let j = 0; j < rotated.length; j++) {
+        if (usedRotated.has(j)) continue;
+        const dist = Math.abs(tr - (rotated[j].r + bestDr)) + Math.abs(tc - (rotated[j].c + bestDc));
+        if (dist < bestDist) { bestDist = dist; bestIdx = j; }
+      }
+      if (bestIdx >= 0) {
+        result[i] = rotated[bestIdx].color;
+        usedRotated.add(bestIdx);
+      } else {
+        result[i] = tiles[0].color; // fallback
+      }
+    }
+
+    return result as TileColor[];
+  }
+
   function tryRotate(direction: 'cw' | 'ccw' | '180'): boolean {
     if (!state.activePiece) return false;
     const piece = state.activePiece;
@@ -161,25 +249,7 @@ export function createGame(settings: Settings, onEvent?: GameEventHandler) {
       const newCol = piece.col + dx;
       const newRow = piece.row + dy;
       if (isValidPosition(state.board, newShapeOffsets, newRow, newCol)) {
-        const oldColors = piece.tiles.map(t => t.color);
-        const n = piece.tiles.length;
-
-        // O, S, Z have identical shapes in some rotation states,
-        // so we must cycle colors to make rotation visible.
-        // I, T, J, L have unique shapes per state — index tracks physical tile.
-        const needsCycle = piece.type === 'O' || piece.type === 'S' || piece.type === 'Z';
-
-        let newColors: TileColor[];
-        if (!needsCycle) {
-          newColors = oldColors; // identity
-        } else if (direction === '180') {
-          // Reverse: top-left↔bottom-right, top-right↔bottom-left
-          newColors = [...oldColors].reverse();
-        } else {
-          // CW: shift 1, CCW: shift 3
-          const shift = direction === 'cw' ? 1 : 3;
-          newColors = oldColors.map((_, i) => oldColors[(i + shift) % n]);
-        }
+        const newColors = computeRotatedColors(piece.tiles, newShapeOffsets, direction, piece.type);
 
         piece.tiles = newShapeOffsets.map((offset, i) => ({
           row: offset[0], col: offset[1],
