@@ -126,7 +126,7 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 // Game constants
-export const GAME_DURATION = 5 * 60 * 1000;
+export const GAME_DURATION = 2 * 60 * 1000;
 export const GRAVITY_INTERVAL = 0;            // 0 = no gravity
 export const LOCK_DELAY = 500;
 export const MAX_LOCK_RESETS = 15;

@@ -13,16 +13,6 @@ import HoldPiecePreview from '../components/HoldPiecePreview';
 import Timer from '../components/Timer';
 import ScoreDisplay from '../components/ScoreDisplay';
 
-function getTodayDisplay(): string {
-  const now = new Date();
-  return now.toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
-}
 
 function computeCellSize(): number {
   if (typeof window === 'undefined') return 32;
@@ -81,10 +71,9 @@ export default function Home() {
 
   return (
     <main className="flex h-screen flex-col items-center justify-center bg-gray-950 text-white overflow-hidden select-none">
-      {/* Title + Date */}
+      {/* Title */}
       <div className="text-center shrink-0 py-1">
         <h1 className="text-xl font-bold tracking-tight">Sudotris</h1>
-        <p className="text-xs text-gray-400">{getTodayDisplay()}</p>
       </div>
 
       {/* Game area */}
@@ -103,9 +92,8 @@ export default function Home() {
           {phase === 'menu' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 rounded-lg">
               <h2 className="text-2xl font-bold mb-2">Sudotris</h2>
-              <p className="text-gray-400 text-sm mb-1">Daily Puzzle</p>
               {bestScore > 0 && (
-                <p className="text-yellow-400 text-sm mb-4">Best: {bestScore}</p>
+                <p className="text-yellow-400 text-sm mb-4">Best: {bestScore.toLocaleString()}</p>
               )}
               <button
                 onClick={start}
@@ -142,7 +130,7 @@ export default function Home() {
           )}
         </div>
 
-        {/* Right panel: Timer + Score */}
+        {/* Right panel: Timer + Score + Best + Reset */}
         <div className="flex flex-col gap-3 pt-2" style={{ width: previewCellSize * 5 + 16 }}>
           <Timer timeRemaining={gameState.timeRemaining} />
           <ScoreDisplay
@@ -150,6 +138,20 @@ export default function Home() {
             linesCleared={gameState.score.linesCleared}
             combo={gameState.score.combo}
           />
+          {bestScore > 0 && (
+            <div>
+              <div className="text-xs uppercase tracking-wider text-yellow-400">Best</div>
+              <div className="text-lg font-mono text-yellow-400">{bestScore.toLocaleString()}</div>
+            </div>
+          )}
+          {phase === 'playing' && (
+            <button
+              onClick={restart}
+              className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-xs transition-colors mt-2"
+            >
+              Reset (R)
+            </button>
+          )}
         </div>
       </div>
 

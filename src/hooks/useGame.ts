@@ -6,14 +6,6 @@ import { drawBoard, drawNextPieces, drawHoldPiece, setRenderSettings } from '../
 import { tickAnimations, hasActiveAnimations, animateLineClear } from '../renderer/animations';
 import { Settings, GameState, InputAction } from '../engine/types';
 
-function getTodayDateStr(): string {
-  const now = new Date();
-  const y = now.getUTCFullYear();
-  const m = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const d = String(now.getUTCDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
 export function useGame(
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
   previewRef: React.RefObject<HTMLCanvasElement | null>,
@@ -52,8 +44,8 @@ export function useGame(
 
   // Create game on mount
   useEffect(() => {
-    const dateStr = getTodayDateStr();
-    gameRef.current = createGame(dateStr, settings, handleGameEvent);
+
+    gameRef.current = createGame(settings, handleGameEvent);
     setGameState(gameRef.current.getState());
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -182,8 +174,8 @@ export function useGame(
       cancelAnimationFrame(animFrameRef.current);
     }
     // Recreate game with same date seed
-    const dateStr = getTodayDateStr();
-    gameRef.current = createGame(dateStr, settings, handleGameEvent);
+
+    gameRef.current = createGame(settings, handleGameEvent);
     gameRef.current.start();
     startLoop();
   }, [settings, startLoop]);

@@ -13,7 +13,7 @@ import {
   RotationState,
   Settings,
 } from './types';
-import { createRng, dateSeed } from './rng';
+import { createRng } from './rng';
 import { createBoard, isValidPosition, lockPiece, evaluateSudokuClears, getGhostRow } from './board';
 import { createBag } from './bag';
 import { PIECE_SHAPES, getKicks, getSpawnCol, getSpawnRow } from './pieces';
@@ -25,8 +25,8 @@ export type GameEvent =
 
 export type GameEventHandler = (event: GameEvent) => void;
 
-export function createGame(dateStr: string, settings: Settings, onEvent?: GameEventHandler) {
-  const seed = dateSeed(dateStr);
+export function createGame(settings: Settings, onEvent?: GameEventHandler) {
+  const seed = Math.floor(Math.random() * 2147483647);
   const rng = createRng(seed);
   const bag = createBag(rng);
   const inputProcessor = createInputProcessor(settings.handling);
