@@ -28,8 +28,8 @@ export function createBag(rng: Rng) {
     return { type, colors };
   }
 
-  function ensureBuffer() {
-    while (buffer.length < 2) buffer.push(generatePiece());
+  function ensureBuffer(n: number = 4) {
+    while (buffer.length < n) buffer.push(generatePiece());
   }
 
   function next(): BagPiece {
@@ -39,12 +39,12 @@ export function createBag(rng: Rng) {
     return piece;
   }
 
-  function peek(): BagPiece {
-    ensureBuffer();
-    return buffer[0];
+  function peekN(count: number): BagPiece[] {
+    ensureBuffer(count + 1);
+    return buffer.slice(0, count);
   }
 
-  return { next, peek };
+  return { next, peekN };
 }
 
 export type Bag = ReturnType<typeof createBag>;

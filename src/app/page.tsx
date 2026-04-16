@@ -109,6 +109,7 @@ export default function Home() {
           <ScoreDisplay
             score={gameState.score.score}
             linesCleared={gameState.score.linesCleared}
+            combo={gameState.score.combo}
           />
         </div>
       </div>

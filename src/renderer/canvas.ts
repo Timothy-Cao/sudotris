@@ -5,7 +5,7 @@ import {
   BOARD_WIDTH,
   VISIBLE_HEIGHT,
 } from '../engine/types';
-import { getRowMajorTiles } from '../engine/pieces';
+import { PIECE_SHAPES } from '../engine/pieces';
 import { isGrayCell } from '../engine/board';
 import {
   TILE_COLORS,
@@ -25,6 +25,10 @@ function boardRowToCanvasY(row: number): number {
   // Row 0 = bottom of board = bottom of canvas
   return (VISIBLE_HEIGHT - 1 - row) * CELL_SIZE;
 }
+
+// Track whether to show numbers (set before each drawBoard call)
+let _showNumbers = false;
+export function setShowNumbers(show: boolean) { _showNumbers = show; }
 
 function drawTileAt(
   ctx: CanvasRenderingContext2D,
@@ -46,6 +50,23 @@ function drawTileAt(
   ctx.strokeStyle = borderColor;
   ctx.lineWidth = 2;
   ctx.strokeRect(canvasX + 1, canvasY + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+
+  // Number overlay (optional, with dark outline for visibility on any color)
+  if (_showNumbers) {
+    const fontSize = Math.floor(CELL_SIZE * 0.45);
+    const cx = canvasX + CELL_SIZE / 2;
+    const cy = canvasY + CELL_SIZE / 2;
+    ctx.font = `bold ${fontSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // Dark stroke for contrast on light tiles
+    ctx.strokeStyle = `rgba(0,0,0,${alpha * 0.7})`;
+    ctx.lineWidth = 3;
+    ctx.strokeText(String(color), cx, cy);
+    // White fill
+    ctx.fillStyle = `rgba(255,255,255,${alpha * 0.95})`;
+    ctx.fillText(String(color), cx, cy);
+  }
 
   ctx.globalAlpha = 1;
 }
@@ -121,12 +142,13 @@ export function drawBoard(ctx: CanvasRenderingContext2D, state: GameState): void
   }
 }
 
-// Draw next piece preview
-const PREVIEW_CELL = 28;
+// Draw next pieces preview (up to 3)
+const PREVIEW_CELL = 24;
+const PREVIEW_GAP = 12;
 
-export function drawNextPiece(
+export function drawNextPieces(
   ctx: CanvasRenderingContext2D,
-  piece: { type: PieceType; colors: TileColor[] } | null
+  pieces: { type: PieceType; colors: TileColor[] }[]
 ): void {
   const width = ctx.canvas.width;
   const height = ctx.canvas.height;
@@ -134,38 +156,44 @@ export function drawNextPiece(
   ctx.fillStyle = BOARD_BG;
   ctx.fillRect(0, 0, width, height);
 
-  if (!piece) return;
+  if (pieces.length === 0) return;
 
-  // Get the spawn (rotation 0) shape offsets
-  const offsets: [number, number][] = getRowMajorTiles(piece.type, 0);
+  // Each piece gets a vertical slot
+  const slotHeight = (height - PREVIEW_GAP * (pieces.length - 1)) / pieces.length;
 
-  // Find bounding box to center
-  let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
-  for (const [r, c] of offsets) {
-    minR = Math.min(minR, r);
-    maxR = Math.max(maxR, r);
-    minC = Math.min(minC, c);
-    maxC = Math.max(maxC, c);
-  }
+  pieces.forEach((piece, idx) => {
+    const slotY = idx * (slotHeight + PREVIEW_GAP);
+    const offsets = PIECE_SHAPES[piece.type][0]; // spawn state
 
-  const pieceW = (maxC - minC + 1) * PREVIEW_CELL;
-  const pieceH = (maxR - minR + 1) * PREVIEW_CELL;
-  const offsetX = (width - pieceW) / 2;
-  const offsetY = (height - pieceH) / 2;
+    let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
+    for (const [r, c] of offsets) {
+      minR = Math.min(minR, r);
+      maxR = Math.max(maxR, r);
+      minC = Math.min(minC, c);
+      maxC = Math.max(maxC, c);
+    }
 
-  offsets.forEach((offset: [number, number], i: number) => {
-    const [r, c] = offset;
-    const cx = offsetX + (c - minC) * PREVIEW_CELL;
-    // Flip Y so higher rows are at top
-    const cy = offsetY + (maxR - r) * PREVIEW_CELL;
-    const color = piece.colors[i];
+    const pieceW = (maxC - minC + 1) * PREVIEW_CELL;
+    const pieceH = (maxR - minR + 1) * PREVIEW_CELL;
+    const offsetX = (width - pieceW) / 2;
+    const offsetY = slotY + (slotHeight - pieceH) / 2;
 
+    offsets.forEach((offset: [number, number], i: number) => {
+      const [r, c] = offset;
+      const cx = offsetX + (c - minC) * PREVIEW_CELL;
+      const cy = offsetY + (maxR - r) * PREVIEW_CELL;
+      const color = piece.colors[i];
+
+      // Fade subsequent previews slightly
+      const alpha = idx === 0 ? 1 : 0.6;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = TILE_COLORS[color];
+      ctx.fillRect(cx + 1, cy + 1, PREVIEW_CELL - 2, PREVIEW_CELL - 2);
+
+      ctx.strokeStyle = TILE_BORDER_COLORS[color];
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(cx + 1, cy + 1, PREVIEW_CELL - 2, PREVIEW_CELL - 2);
+    });
     ctx.globalAlpha = 1;
-    ctx.fillStyle = TILE_COLORS[color];
-    ctx.fillRect(cx + 1, cy + 1, PREVIEW_CELL - 2, PREVIEW_CELL - 2);
-
-    ctx.strokeStyle = TILE_BORDER_COLORS[color];
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(cx + 1, cy + 1, PREVIEW_CELL - 2, PREVIEW_CELL - 2);
   });
 }

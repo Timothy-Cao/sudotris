@@ -18,6 +18,7 @@ export function useSettings() {
         setSettings({
           keyBindings: { ...DEFAULT_SETTINGS.keyBindings, ...parsed.keyBindings },
           handling: { ...DEFAULT_SETTINGS.handling, ...parsed.handling },
+          showNumbers: parsed.showNumbers ?? DEFAULT_SETTINGS.showNumbers,
         });
       } catch {
         // use defaults
@@ -28,9 +29,10 @@ export function useSettings() {
 
   const updateSettings = useCallback((partial: Partial<Settings>) => {
     setSettings(prev => {
-      const next = {
+      const next: Settings = {
         keyBindings: { ...prev.keyBindings, ...partial.keyBindings },
         handling: { ...prev.handling, ...partial.handling },
+        showNumbers: partial.showNumbers ?? prev.showNumbers,
       };
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
       return next;

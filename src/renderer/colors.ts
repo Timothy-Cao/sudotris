@@ -1,25 +1,26 @@
 import { TileColor } from '../engine/types';
 
 export const TILE_COLORS: Record<TileColor, string> = {
-  1: '#FF4444', // Red
-  2: '#44AAFF', // Blue
-  3: '#44DD44', // Green
-  4: '#FFAA00', // Orange
-  5: '#AA44FF', // Purple
-  6: '#FFDD44', // Yellow
-  7: '#FF66AA', // Pink
-  8: '#44DDDD', // Cyan
+  1: '#00F0F0', // Cyan
+  2: '#F0F000', // Yellow
+  3: '#A000F0', // Purple
+  4: '#00F000', // Green
+  5: '#F00000', // Red
+  6: '#0000F0', // Blue
+  7: '#F0A000', // Orange
+  8: '#F000F0', // Magenta
 };
 
+// Slightly darker borders
 export const TILE_BORDER_COLORS: Record<TileColor, string> = {
-  1: '#CC2222',
-  2: '#2288DD',
-  3: '#22AA22',
-  4: '#DD8800',
-  5: '#8822DD',
-  6: '#DDBB22',
-  7: '#DD4488',
-  8: '#22BBBB',
+  1: '#00C0C0',
+  2: '#C0C000',
+  3: '#8000C0',
+  4: '#00C000',
+  5: '#C00000',
+  6: '#0000C0',
+  7: '#C08000',
+  8: '#C000C0',
 };
 
 export const GHOST_ALPHA = 0.3;

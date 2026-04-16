@@ -60,6 +60,7 @@ export interface HandlingConfig {
 export interface Settings {
   keyBindings: KeyBindings;
   handling: HandlingConfig;
+  showNumbers: boolean;
 }
 
 // Game phases
@@ -87,7 +88,7 @@ export interface GameState {
   lockedRowCount: number; // gray inert rows stacked at the bottom
   activePiece: ActivePiece | null;
   ghostRow: number | null;
-  nextPiece: { type: PieceType; colors: TileColor[] } | null;
+  nextPieces: { type: PieceType; colors: TileColor[] }[];
   phase: GamePhase;
   score: ScoreState;
   timeRemaining: number;
@@ -115,6 +116,7 @@ export const DEFAULT_HANDLING: HandlingConfig = {
 export const DEFAULT_SETTINGS: Settings = {
   keyBindings: DEFAULT_KEY_BINDINGS,
   handling: DEFAULT_HANDLING,
+  showNumbers: false,
 };
 
 // Game constants

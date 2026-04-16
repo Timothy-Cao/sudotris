@@ -34,7 +34,7 @@ export function createGame(dateStr: string, settings: Settings) {
     lockedRowCount: 0,
     activePiece: null,
     ghostRow: null,
-    nextPiece: null,
+    nextPieces: [],
     phase: 'menu',
     score: createScoreState(),
     timeRemaining: GAME_DURATION,
@@ -43,6 +43,7 @@ export function createGame(dateStr: string, settings: Settings) {
   };
 
   let gravityAccumulator = 0;
+  let lastActionWasRotation = false;
 
   function spawnPiece(): boolean {
     const bagPiece = bag.next();
@@ -74,9 +75,8 @@ export function createGame(dateStr: string, settings: Settings) {
       col: spawnCol,
     };
 
-    // Update next piece preview
-    const nextBag = bag.peek();
-    state.nextPiece = { type: nextBag.type, colors: nextBag.colors };
+    // Update next piece preview (3 ahead)
+    state.nextPieces = bag.peekN(3).map(p => ({ type: p.type, colors: [...p.colors] }));
 
     // Update ghost
     state.ghostRow = getGhostRow(state.board, state.activePiece);
@@ -102,7 +102,7 @@ export function createGame(dateStr: string, settings: Settings) {
       lockedRowCount: 0,
       activePiece: null,
       ghostRow: null,
-      nextPiece: null,
+      nextPieces: [],
       phase: 'playing',
       score: createScoreState(),
       timeRemaining: GAME_DURATION,
@@ -182,9 +182,39 @@ export function createGame(dateStr: string, settings: Settings) {
     return isValidPosition(state.board, offsets, state.activePiece.row - 1, state.activePiece.col);
   }
 
+  // T-spin detection: 3-corner rule
+  // After a T-piece locks via rotation, check 4 corners of its 3x3 bounding box
+  function detectTSpin(piece: ActivePiece): boolean {
+    if (piece.type !== 'T') return false;
+    if (!lastActionWasRotation) return false;
+
+    // The T-piece center is at bounding box position [1,1] relative to origin
+    // Corners of the 3x3 box: [0,0], [0,2], [2,0], [2,2]
+    const corners: [number, number][] = [
+      [piece.row + 0, piece.col + 0],
+      [piece.row + 0, piece.col + 2],
+      [piece.row + 2, piece.col + 0],
+      [piece.row + 2, piece.col + 2],
+    ];
+
+    let occupied = 0;
+    for (const [r, c] of corners) {
+      if (r < 0 || r >= BOARD_HEIGHT || c < 0 || c >= BOARD_WIDTH) {
+        occupied++; // out of bounds = occupied
+      } else if (state.board[r][c] !== null) {
+        occupied++;
+      }
+    }
+
+    return occupied >= 3;
+  }
+
   function lockCurrentPiece(): void {
     if (!state.activePiece) return;
     const piece = state.activePiece;
+
+    // Detect T-spin BEFORE locking (check against board without this piece)
+    const tSpin = detectTSpin(piece);
 
     // Lock the piece onto the board
     state.board = lockPiece(state.board, piece);
@@ -203,7 +233,7 @@ export function createGame(dateStr: string, settings: Settings) {
     const result = evaluateLines(state.board, state.lockedRowCount);
     state.board = result.board;
     state.lockedRowCount = result.lockedRowCount;
-    state.score = updateScore(state.score, result.linesCleared);
+    state.score = updateScore(state.score, result.linesCleared, tSpin);
 
     state.activePiece = null;
 
@@ -221,27 +251,31 @@ export function createGame(dateStr: string, settings: Settings) {
     switch (action) {
       case 'moveLeft':
         moved = tryMove(0, -1);
+        if (moved) lastActionWasRotation = false;
         break;
       case 'moveRight':
         moved = tryMove(0, 1);
+        if (moved) lastActionWasRotation = false;
         break;
       case 'rotateCW':
         moved = tryRotate('cw');
+        if (moved) lastActionWasRotation = true;
         break;
       case 'rotateCCW':
         moved = tryRotate('ccw');
+        if (moved) lastActionWasRotation = true;
         break;
       case 'rotate180':
         moved = tryRotate('180');
+        if (moved) lastActionWasRotation = true;
         break;
       case 'hardDrop':
         if (state.activePiece && state.ghostRow !== null) {
           state.activePiece.row = state.ghostRow;
           lockCurrentPiece();
         }
-        return; // skip lock delay reset
+        return;
       case 'softDrop':
-        // Handled via isSoftDropping in tick
         return;
     }
 
@@ -354,7 +388,7 @@ export function createGame(dateStr: string, settings: Settings) {
       activePiece: state.activePiece ? { ...state.activePiece, tiles: [...state.activePiece.tiles] } : null,
       score: { ...state.score },
       lockDelay: { ...state.lockDelay },
-      nextPiece: state.nextPiece ? { ...state.nextPiece, colors: [...state.nextPiece.colors] } : null,
+      nextPieces: state.nextPieces.map(p => ({ ...p, colors: [...p.colors] })),
     };
   }
 

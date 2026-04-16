@@ -9,7 +9,7 @@ const NextPiecePreview = forwardRef<HTMLCanvasElement>(function NextPiecePreview
       <canvas
         ref={ref}
         width={120}
-        height={90}
+        height={240}
         className="rounded border border-gray-700"
       />
     </div>

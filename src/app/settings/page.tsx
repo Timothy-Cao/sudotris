@@ -56,6 +56,7 @@ export default function SettingsPage() {
         setSettings({
           keyBindings: { ...DEFAULT_SETTINGS.keyBindings, ...parsed.keyBindings },
           handling: { ...DEFAULT_SETTINGS.handling, ...parsed.handling },
+          showNumbers: parsed.showNumbers ?? DEFAULT_SETTINGS.showNumbers,
         });
       } catch {
         // use defaults
@@ -207,6 +208,20 @@ export default function SettingsPage() {
               className="w-full accent-indigo-500"
             />
           </div>
+        </section>
+
+        {/* Display */}
+        <section className="mb-8">
+          <h2 className="text-lg font-semibold mb-3 text-gray-300">Display</h2>
+          <label className="flex items-center gap-3 bg-gray-900 rounded px-4 py-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={settings.showNumbers}
+              onChange={e => save({ ...settings, showNumbers: e.target.checked })}
+              className="accent-indigo-500 w-4 h-4"
+            />
+            <span className="text-sm">Show color numbers on tiles</span>
+          </label>
         </section>
 
         {/* Reset */}

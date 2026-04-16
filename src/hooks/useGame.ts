@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { createGame, Game } from '../engine/game';
-import { drawBoard, drawNextPiece } from '../renderer/canvas';
+import { drawBoard, drawNextPieces, setShowNumbers } from '../renderer/canvas';
 import { Settings, GameState, InputAction, GamePhase } from '../engine/types';
 
 function getTodayDateStr(): string {
@@ -21,6 +21,9 @@ export function useGame(
   const gameRef = useRef<Game | null>(null);
   const animFrameRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
+  const restartRef = useRef<(() => void) | null>(null);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
   const [gameState, setGameState] = useState<GameState | null>(null);
 
   // Build reverse key map: code -> action
@@ -63,6 +66,9 @@ export function useGame(
       const state = game.getState();
       setGameState(state);
 
+      // Update render settings
+      setShowNumbers(settingsRef.current.showNumbers);
+
       // Draw board
       const canvas = canvasRef.current;
       if (canvas) {
@@ -74,7 +80,7 @@ export function useGame(
       const preview = previewRef.current;
       if (preview) {
         const pctx = preview.getContext('2d');
-        if (pctx) drawNextPiece(pctx, state.nextPiece);
+        if (pctx) drawNextPieces(pctx, state.nextPieces);
       }
 
       if (state.phase === 'playing') {
@@ -91,6 +97,13 @@ export function useGame(
   // Keyboard input
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      // R = restart (works in any phase)
+      if (e.code === 'KeyR') {
+        e.preventDefault();
+        restartRef.current?.();
+        return;
+      }
+
       const game = gameRef.current;
       if (!game || game.getState().phase !== 'playing') return;
 
@@ -148,6 +161,9 @@ export function useGame(
     gameRef.current.start();
     startLoop();
   }, [settings, startLoop]);
+
+  // Keep ref in sync for keyboard handler
+  restartRef.current = restart;
 
   return { gameState, start, restart };
 }
