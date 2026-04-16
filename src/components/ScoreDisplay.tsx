@@ -11,7 +11,7 @@ export default function ScoreDisplay({ score, linesCleared, combo }: ScoreDispla
     <div className="flex flex-col gap-2 text-white">
       <div>
         <div className="text-xs uppercase tracking-wider text-gray-400">Score</div>
-        <div className="text-2xl font-mono font-bold">{score}</div>
+        <div className="text-2xl font-mono font-bold">{score.toLocaleString()}</div>
       </div>
       <div>
         <div className="text-xs uppercase tracking-wider text-gray-400">Lines</div>

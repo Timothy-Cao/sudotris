@@ -33,4 +33,5 @@ export const LOCKED_ROW_BORDER = '#2a2a3e';
 
 export const BOARD_BG = '#0f0f23';
 export const GRID_LINE = '#1a1a3e';
-export const CELL_SIZE = 36;
+export let CELL_SIZE = 36;
+export function setCellSize(size: number) { CELL_SIZE = size; }

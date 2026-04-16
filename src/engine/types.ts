@@ -13,7 +13,7 @@ export type Cell = { color: TileColor } | null;
 
 // Board dimensions
 export const BOARD_WIDTH = 6;
-export const BOARD_HEIGHT = 21; // 18 visible + 3 spawn
+export const BOARD_HEIGHT = 20; // 18 visible + 2 spawn
 export const VISIBLE_HEIGHT = 18;
 export const SPAWN_ROW = 18; // lowest spawn zone row
 

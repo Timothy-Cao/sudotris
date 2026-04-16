@@ -1,7 +1,7 @@
 import { BOARD_WIDTH, BOARD_HEIGHT, VISIBLE_HEIGHT } from '../engine/types';
 import { CELL_SIZE } from './colors';
 
-const TOTAL_VISIBLE_ROWS = 21;
+const TOTAL_VISIBLE_ROWS = 20;
 
 function boardRowToCanvasY(row: number): number {
   return (TOTAL_VISIBLE_ROWS - 1 - row) * CELL_SIZE;

@@ -19,12 +19,9 @@ import {
   CELL_SIZE,
 } from './colors';
 
-const TOTAL_VISIBLE_ROWS = 21; // 18 playfield + 3 spawn zone
-export const CANVAS_WIDTH = BOARD_WIDTH * CELL_SIZE;
-export const CANVAS_HEIGHT = TOTAL_VISIBLE_ROWS * CELL_SIZE;
+export const TOTAL_VISIBLE_ROWS = 20; // 18 playfield + 2 spawn zone
 
 function boardRowToCanvasY(row: number): number {
-  // Row 0 = bottom of board = bottom of canvas
   return (TOTAL_VISIBLE_ROWS - 1 - row) * CELL_SIZE;
 }
 
@@ -162,7 +159,7 @@ export function drawBoard(ctx: CanvasRenderingContext2D, state: GameState): void
 
   // Clear
   ctx.fillStyle = BOARD_BG;
-  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  ctx.fillRect(0, 0, (BOARD_WIDTH * CELL_SIZE), (TOTAL_VISIBLE_ROWS * CELL_SIZE));
 
   // Grid lines (all 21 rows)
   ctx.strokeStyle = GRID_LINE;
@@ -170,13 +167,13 @@ export function drawBoard(ctx: CanvasRenderingContext2D, state: GameState): void
   for (let c = 1; c < BOARD_WIDTH; c++) {
     ctx.beginPath();
     ctx.moveTo(c * CELL_SIZE, 0);
-    ctx.lineTo(c * CELL_SIZE, CANVAS_HEIGHT);
+    ctx.lineTo(c * CELL_SIZE, (TOTAL_VISIBLE_ROWS * CELL_SIZE));
     ctx.stroke();
   }
   for (let r = 1; r < TOTAL_VISIBLE_ROWS; r++) {
     ctx.beginPath();
     ctx.moveTo(0, r * CELL_SIZE);
-    ctx.lineTo(CANVAS_WIDTH, r * CELL_SIZE);
+    ctx.lineTo((BOARD_WIDTH * CELL_SIZE), r * CELL_SIZE);
     ctx.stroke();
   }
 
@@ -188,7 +185,7 @@ export function drawBoard(ctx: CanvasRenderingContext2D, state: GameState): void
   ctx.setLineDash([8, 6]);
   ctx.beginPath();
   ctx.moveTo(0, dangerLineY);
-  ctx.lineTo(CANVAS_WIDTH, dangerLineY);
+  ctx.lineTo((BOARD_WIDTH * CELL_SIZE), dangerLineY);
   ctx.stroke();
   ctx.restore();
 

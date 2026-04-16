@@ -1,17 +1,24 @@
 'use client';
 
 import { forwardRef } from 'react';
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../renderer/canvas';
+import { BOARD_WIDTH } from '../engine/types';
+import { TOTAL_VISIBLE_ROWS } from '../renderer/canvas';
 
-const GameCanvas = forwardRef<HTMLCanvasElement>(function GameCanvas(_, ref) {
-  return (
-    <canvas
-      ref={ref}
-      width={CANVAS_WIDTH}
-      height={CANVAS_HEIGHT}
-      className="rounded-lg border-2 border-gray-700"
-    />
-  );
-});
+interface GameCanvasProps {
+  cellSize: number;
+}
+
+const GameCanvas = forwardRef<HTMLCanvasElement, GameCanvasProps>(
+  function GameCanvas({ cellSize }, ref) {
+    return (
+      <canvas
+        ref={ref}
+        width={BOARD_WIDTH * cellSize}
+        height={TOTAL_VISIBLE_ROWS * cellSize}
+        className="rounded-lg border-2 border-gray-700"
+      />
+    );
+  }
+);
 
 export default GameCanvas;

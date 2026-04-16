@@ -176,15 +176,15 @@ export function getKicks(
 
 // Spawn column offset to center piece on 6-wide board
 export function getSpawnCol(type: PieceType): number {
-  if (isBombType(type)) return 3; // center-ish for 1x1
+  if (isBombType(type)) return 3;
   return type === 'I' ? 1 : 1;
 }
 
-// Spawn row
+// Spawn row — 2 rows of spawn zone above visible area (rows 18-19)
 export function getSpawnRow(type: PieceType): number {
-  if (isBombType(type)) return 20; // 1x1 spawns at top of spawn zone
-  if (type === 'I') return 18;
-  return 19;
+  if (isBombType(type)) return 19; // 1x1 at top of spawn zone
+  if (type === 'I') return 17;     // I-piece: tiles at rows 17-18
+  return 18;                        // 3-wide: tiles at rows 18-19
 }
 
 // Get shape offsets sorted in row-major order (top-to-bottom, left-to-right)
