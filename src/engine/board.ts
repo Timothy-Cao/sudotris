@@ -6,6 +6,7 @@ import {
   BOARD_WIDTH,
   BOARD_HEIGHT,
   VISIBLE_HEIGHT,
+  NUM_COLORS,
 } from './types';
 
 export function createBoard(): Board {
@@ -43,129 +44,148 @@ export function lockPiece(board: Board, piece: ActivePiece): Board {
   return newBoard;
 }
 
-// Gray cell marker — color 0 is not a valid TileColor, so we use a sentinel.
-// A "locked" (gray) cell is represented as { color: 0 as TileColor }.
-export const GRAY_CELL: Cell = { color: 0 as TileColor };
-
-export function isGrayCell(cell: Cell): boolean {
-  return cell !== null && (cell.color as number) === 0;
-}
-
-function makeGrayRow(): Cell[] {
-  return new Array(BOARD_WIDTH).fill(null).map(() => ({ color: 0 as TileColor }));
-}
-
-// Evaluate lines after a piece locks.
-// lockedRowCount = number of gray rows at the bottom.
-export function evaluateLines(
+// Sudoku clear: find groups of 4 cells in a row, column, or 2x2 square
+// that contain all NUM_COLORS unique colors. Clear them.
+// Only checks around newly placed tile positions for performance.
+// Returns the updated board, number of clears, and cleared cell positions.
+export function evaluateSudokuClears(
   board: Board,
-  lockedRowCount: number
-): { board: Board; lockedRowCount: number; linesCleared: number; tilesCleared: number; clearedRowIndices: number[]; penaltyRowIndices: number[] } {
+  newTilePositions: { row: number; col: number }[]
+): { board: Board; clears: number; clearedCells: { row: number; col: number }[] } {
   const newBoard = board.map(row => [...row]);
+  let totalClears = 0;
+  const allClearedCells: { row: number; col: number }[] = [];
 
-  // Step 1: identify full rows above the locked zone
-  const clearRows: number[] = [];
-  const penaltyRows: number[] = [];
+  // Keep clearing until no more clears found (chain reaction)
+  let foundClear = true;
+  while (foundClear) {
+    foundClear = false;
 
-  for (let r = lockedRowCount; r < VISIBLE_HEIGHT; r++) {
-    if (isRowFull(newBoard, r)) {
-      if (hasUniqueColors(newBoard, r)) {
-        clearRows.push(r);
-      } else {
-        penaltyRows.push(r);
+    // Collect candidate groups to check — scan around affected cells
+    // For efficiency, use a set of rows/cols that were touched
+    const affectedRows = new Set<number>();
+    const affectedCols = new Set<number>();
+    if (totalClears === 0) {
+      // First pass: only check around newly placed tiles
+      for (const pos of newTilePositions) {
+        affectedRows.add(pos.row);
+        affectedCols.add(pos.col);
+      }
+    } else {
+      // Subsequent passes (chain reactions): check around previously cleared cells
+      for (const pos of allClearedCells) {
+        affectedRows.add(pos.row);
+        affectedCols.add(pos.col);
       }
     }
-  }
 
-  // Step 2: remove clear rows AND penalty rows (both get deleted).
-  // Sort all rows to remove descending so indices stay stable.
-  const allRemoveRows = [...clearRows, ...penaltyRows].sort((a, b) => b - a);
-  for (const r of allRemoveRows) {
-    newBoard.splice(r, 1);
-    newBoard.push(new Array<Cell>(BOARD_WIDTH).fill(null));
-  }
+    // Find the first valid clear (leftmost, then highest for tie-breaking)
+    let bestClear: { row: number; col: number }[] | null = null;
+    let bestScore = Infinity; // lower = higher priority (leftmost, highest)
 
-  // Step 3: for each penalty row, insert a gray row at the bottom (row 0).
-  // This frees the holes underneath the penalty row but adds gray at bottom.
-  let newLockedCount = lockedRowCount;
-  for (let p = 0; p < penaltyRows.length; p++) {
-    newBoard.pop();
-    newBoard.splice(0, 0, makeGrayRow());
-    newLockedCount++;
-  }
-
-  // All removed rows had BOARD_WIDTH tiles each
-  const tilesCleared = allRemoveRows.length * BOARD_WIDTH;
-
-  return {
-    board: newBoard,
-    lockedRowCount: newLockedCount,
-    linesCleared: clearRows.length,
-    tilesCleared,
-    clearedRowIndices: clearRows,
-    penaltyRowIndices: penaltyRows,
-  };
-}
-
-// Bomb explosion: clear cells in the blast zone, then apply gravity
-// Returns cells destroyed count for potential scoring
-export function explodeBomb(
-  board: Board,
-  bombRow: number,
-  bombCol: number,
-  bombType: 'BOMB_ROW' | 'BOMB_COL' | 'BOMB_3X3'
-): { board: Board; cellsDestroyed: number } {
-  const newBoard = board.map(row => [...row]);
-  let destroyed = 0;
-
-  if (bombType === 'BOMB_ROW') {
-    // Clear entire row
-    for (let c = 0; c < BOARD_WIDTH; c++) {
-      if (newBoard[bombRow][c] !== null && !isGrayCell(newBoard[bombRow][c])) {
-        newBoard[bombRow][c] = null;
-        destroyed++;
-      }
-    }
-  } else if (bombType === 'BOMB_COL') {
-    // Clear entire column
-    for (let r = 0; r < BOARD_HEIGHT; r++) {
-      if (newBoard[r][bombCol] !== null && !isGrayCell(newBoard[r][bombCol])) {
-        newBoard[r][bombCol] = null;
-        destroyed++;
-      }
-    }
-  } else {
-    // BOMB_3X3: clear 3x3 area centered on bomb
-    for (let dr = -1; dr <= 1; dr++) {
-      for (let dc = -1; dc <= 1; dc++) {
-        const r = bombRow + dr;
-        const c = bombCol + dc;
-        if (r >= 0 && r < BOARD_HEIGHT && c >= 0 && c < BOARD_WIDTH) {
-          if (newBoard[r][c] !== null && !isGrayCell(newBoard[r][c])) {
-            newBoard[r][c] = null;
-            destroyed++;
+    // Check horizontal groups of 4 in affected rows
+    for (const r of affectedRows) {
+      if (r < 0 || r >= BOARD_HEIGHT) continue;
+      for (let c = 0; c <= BOARD_WIDTH - NUM_COLORS; c++) {
+        const group = checkGroup(newBoard, Array.from({ length: NUM_COLORS }, (_, i) => ({ row: r, col: c + i })));
+        if (group) {
+          const score = c * 1000 + (BOARD_HEIGHT - r); // prefer leftmost, then highest
+          if (score < bestScore) {
+            bestScore = score;
+            bestClear = group;
           }
         }
       }
     }
+
+    // Check vertical groups of 4 in affected columns
+    for (const c of affectedCols) {
+      if (c < 0 || c >= BOARD_WIDTH) continue;
+      for (let r = 0; r <= BOARD_HEIGHT - NUM_COLORS; r++) {
+        const group = checkGroup(newBoard, Array.from({ length: NUM_COLORS }, (_, i) => ({ row: r + i, col: c })));
+        if (group) {
+          const score = c * 1000 + (BOARD_HEIGHT - r);
+          if (score < bestScore) {
+            bestScore = score;
+            bestClear = group;
+          }
+        }
+      }
+    }
+
+    // Check 2x2 squares around affected positions
+    const checked2x2 = new Set<string>();
+    for (const r of affectedRows) {
+      for (const c of affectedCols) {
+        // Check all 2x2 squares that include (r, c)
+        for (let dr = -1; dr <= 0; dr++) {
+          for (let dc = -1; dc <= 0; dc++) {
+            const tr = r + dr;
+            const tc = c + dc;
+            const key = `${tr},${tc}`;
+            if (checked2x2.has(key)) continue;
+            checked2x2.add(key);
+            if (tr < 0 || tr + 1 >= BOARD_HEIGHT || tc < 0 || tc + 1 >= BOARD_WIDTH) continue;
+            const group = checkGroup(newBoard, [
+              { row: tr, col: tc }, { row: tr, col: tc + 1 },
+              { row: tr + 1, col: tc }, { row: tr + 1, col: tc + 1 },
+            ]);
+            if (group) {
+              const score = tc * 1000 + (BOARD_HEIGHT - tr);
+              if (score < bestScore) {
+                bestScore = score;
+                bestClear = group;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (bestClear) {
+      foundClear = true;
+      totalClears++;
+      for (const pos of bestClear) {
+        newBoard[pos.row][pos.col] = null;
+        allClearedCells.push(pos);
+      }
+      // After clearing, apply gravity so tiles above drop down
+      applyGravity(newBoard);
+    }
   }
 
-  // The bomb itself is already cleared (it was in the blast zone)
-  // Apply gravity: cells above empty spaces drop down
+  return { board: newBoard, clears: totalClears, clearedCells: allClearedCells };
+}
+
+// Check if a group of positions contains all NUM_COLORS unique colors
+function checkGroup(
+  board: Board,
+  positions: { row: number; col: number }[]
+): { row: number; col: number }[] | null {
+  if (positions.length !== NUM_COLORS) return null;
+  const colors = new Set<TileColor>();
+  for (const pos of positions) {
+    const cell = board[pos.row]?.[pos.col];
+    if (!cell) return null;
+    colors.add(cell.color);
+  }
+  return colors.size === NUM_COLORS ? positions : null;
+}
+
+// Apply gravity: cells drop down to fill empty spaces
+function applyGravity(board: Board): void {
   for (let c = 0; c < BOARD_WIDTH; c++) {
     let writeIdx = 0;
     for (let r = 0; r < BOARD_HEIGHT; r++) {
-      if (newBoard[r][c] !== null) {
+      if (board[r][c] !== null) {
         if (r !== writeIdx) {
-          newBoard[writeIdx][c] = newBoard[r][c];
-          newBoard[r][c] = null;
+          board[writeIdx][c] = board[r][c];
+          board[r][c] = null;
         }
         writeIdx++;
       }
     }
   }
-
-  return { board: newBoard, cellsDestroyed: destroyed };
 }
 
 export function getGhostRow(
@@ -180,20 +200,7 @@ export function getGhostRow(
   return row;
 }
 
-function isRowFull(board: Board, row: number): boolean {
-  for (let c = 0; c < BOARD_WIDTH; c++) {
-    if (board[row][c] === null) return false;
-  }
-  return true;
-}
-
-function hasUniqueColors(board: Board, row: number): boolean {
-  const colors = new Set<TileColor>();
-  for (let c = 0; c < BOARD_WIDTH; c++) {
-    const cell = board[row][c];
-    if (cell === null) return false;
-    if (isGrayCell(cell)) return false; // gray cells don't count as colored
-    colors.add(cell.color);
-  }
-  return colors.size === BOARD_WIDTH;
+// Keep these exports for interface compat (unused now)
+export function isGrayCell(cell: Cell): boolean {
+  return cell !== null && (cell.color as number) === 0;
 }

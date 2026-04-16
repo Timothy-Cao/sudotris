@@ -3,7 +3,7 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { createGame, Game, GameEvent } from '../engine/game';
 import { drawBoard, drawNextPieces, drawHoldPiece, setRenderSettings } from '../renderer/canvas';
-import { tickAnimations, hasActiveAnimations, animateLineClear, animateBombExplosion, animatePenaltyRow } from '../renderer/animations';
+import { tickAnimations, hasActiveAnimations, animateLineClear } from '../renderer/animations';
 import { Settings, GameState, InputAction } from '../engine/types';
 
 function getTodayDateStr(): string {
@@ -41,15 +41,12 @@ export function useGame(
 
   function handleGameEvent(event: GameEvent) {
     switch (event.type) {
-      case 'lineClear':
-        animateLineClear(event.rows);
+      case 'sudokuClear': {
+        // Get unique rows from cleared cells for the flash animation
+        const rows = [...new Set(event.cells.map(c => c.row))];
+        animateLineClear(rows);
         break;
-      case 'penalty':
-        animatePenaltyRow(event.rows);
-        break;
-      case 'bombExplode':
-        animateBombExplosion(event.row, event.col, event.bombType);
-        break;
+      }
     }
   }
 

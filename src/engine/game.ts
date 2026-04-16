@@ -1,35 +1,29 @@
 import {
   GameState,
-  GamePhase,
   ActivePiece,
   PieceTile,
   InputAction,
   BOARD_WIDTH,
   BOARD_HEIGHT,
   VISIBLE_HEIGHT,
-  SPAWN_ROW,
   GAME_DURATION,
-  GRAVITY_INTERVAL,
   LOCK_DELAY,
   MAX_LOCK_RESETS,
   TileColor,
   RotationState,
   Settings,
 } from './types';
-import { createRng, dateSeed, Rng } from './rng';
-import { createBoard, isValidPosition, lockPiece, evaluateLines, explodeBomb, getGhostRow } from './board';
-import { isBombType } from './pieces';
-
-export type GameEvent =
-  | { type: 'lineClear'; rows: number[] }
-  | { type: 'penalty'; rows: number[] }
-  | { type: 'bombExplode'; row: number; col: number; bombType: 'BOMB_ROW' | 'BOMB_COL' | 'BOMB_3X3' };
-
-export type GameEventHandler = (event: GameEvent) => void;
-import { createBag, Bag } from './bag';
+import { createRng, dateSeed } from './rng';
+import { createBoard, isValidPosition, lockPiece, evaluateSudokuClears, getGhostRow } from './board';
+import { createBag } from './bag';
 import { PIECE_SHAPES, getKicks, getSpawnCol, getSpawnRow } from './pieces';
 import { createScoreState, updateScore } from './scoring';
-import { createInputProcessor, InputProcessor } from './input';
+import { createInputProcessor } from './input';
+
+export type GameEvent =
+  | { type: 'sudokuClear'; cells: { row: number; col: number }[] };
+
+export type GameEventHandler = (event: GameEvent) => void;
 
 export function createGame(dateStr: string, settings: Settings, onEvent?: GameEventHandler) {
   const seed = dateSeed(dateStr);
@@ -52,7 +46,6 @@ export function createGame(dateStr: string, settings: Settings, onEvent?: GameEv
     softDropping: false,
   };
 
-  let gravityAccumulator = 0;
   let lastActionWasRotation = false;
 
   function spawnPiece(): boolean {
@@ -61,39 +54,24 @@ export function createGame(dateStr: string, settings: Settings, onEvent?: GameEv
     const spawnRow = getSpawnRow(type);
     const spawnCol = getSpawnCol(type);
 
-    // Assign colors to tiles by their index in PIECE_SHAPES.
     const shapeOffsets = PIECE_SHAPES[type][0];
     const tiles: PieceTile[] = shapeOffsets.map((offset, i) => ({
       row: offset[0],
       col: offset[1],
-      color: colors[i] || (0 as TileColor), // bombs use 0 (rendered specially)
+      color: colors[i],
     }));
 
     const tileOffsets = tiles.map(t => [t.row, t.col] as [number, number]);
-
-    // Check blockout: does the new piece overlap existing blocks?
     if (!isValidPosition(state.board, tileOffsets, spawnRow, spawnCol)) {
-      return false; // blockout
+      return false;
     }
 
     state.activePiece = {
-      type,
-      tiles,
-      rotation: 0,
-      row: spawnRow,
-      col: spawnCol,
+      type, tiles, rotation: 0, row: spawnRow, col: spawnCol,
     };
-
-    // Update next piece preview (3 ahead)
     state.nextPieces = bag.peekN(3).map(p => ({ type: p.type, colors: [...p.colors] }));
-
-    // Update ghost
     state.ghostRow = getGhostRow(state.board, state.activePiece);
-
-    // Reset lock delay
     state.lockDelay = { active: false, timer: 0, resets: 0 };
-    gravityAccumulator = 0;
-
     return true;
   }
 
@@ -103,51 +81,36 @@ export function createGame(dateStr: string, settings: Settings, onEvent?: GameEv
     const currentColors = current.tiles.map(t => t.color);
 
     if (state.holdPiece) {
-      // Swap: spawn the held piece, hold the current one
       const held = state.holdPiece;
       state.holdPiece = { type: current.type, colors: currentColors };
 
-      // Spawn the held piece
       const spawnRow = getSpawnRow(held.type);
       const spawnCol = getSpawnCol(held.type);
       const shapeOffsets = PIECE_SHAPES[held.type][0];
       const tiles: PieceTile[] = shapeOffsets.map((offset, i) => ({
-        row: offset[0],
-        col: offset[1],
-        color: held.colors[i],
+        row: offset[0], col: offset[1], color: held.colors[i],
       }));
       const tileOffsets = tiles.map(t => [t.row, t.col] as [number, number]);
-
       if (!isValidPosition(state.board, tileOffsets, spawnRow, spawnCol)) {
         state.phase = 'gameover';
         return;
       }
-
       state.activePiece = { type: held.type, tiles, rotation: 0, row: spawnRow, col: spawnCol };
       state.ghostRow = getGhostRow(state.board, state.activePiece);
     } else {
-      // No held piece — hold current, spawn next from bag
       state.holdPiece = { type: current.type, colors: currentColors };
       state.activePiece = null;
-      if (!spawnPiece()) {
-        state.phase = 'gameover';
-        return;
-      }
+      if (!spawnPiece()) { state.phase = 'gameover'; return; }
     }
-
     state.canHold = false;
     state.lockDelay = { active: false, timer: 0, resets: 0 };
-    gravityAccumulator = 0;
     lastActionWasRotation = false;
   }
 
   function start(): void {
-    // Fresh bag from seed
     const freshRng = createRng(seed);
     const freshBag = createBag(freshRng);
     Object.assign(bag, freshBag);
-
-    // Reset input processor (clear stale DAS/ARR key states)
     inputProcessor.reset();
 
     state = {
@@ -164,11 +127,8 @@ export function createGame(dateStr: string, settings: Settings, onEvent?: GameEv
       lockDelay: { active: false, timer: 0, resets: 0 },
       softDropping: false,
     };
-    gravityAccumulator = 0;
 
-    if (!spawnPiece()) {
-      state.phase = 'gameover';
-    }
+    if (!spawnPiece()) { state.phase = 'gameover'; }
   }
 
   function tryMove(dr: number, dc: number): boolean {
@@ -176,7 +136,6 @@ export function createGame(dateStr: string, settings: Settings, onEvent?: GameEv
     const offsets = state.activePiece.tiles.map(t => [t.row, t.col] as [number, number]);
     const newRow = state.activePiece.row + dr;
     const newCol = state.activePiece.col + dc;
-
     if (isValidPosition(state.board, offsets, newRow, newCol)) {
       state.activePiece.row = newRow;
       state.activePiece.col = newCol;
@@ -191,14 +150,9 @@ export function createGame(dateStr: string, settings: Settings, onEvent?: GameEv
     const piece = state.activePiece;
     const from = piece.rotation;
     let to: RotationState;
-
-    if (direction === 'cw') {
-      to = ((from + 1) % 4) as RotationState;
-    } else if (direction === 'ccw') {
-      to = ((from + 3) % 4) as RotationState;
-    } else {
-      to = ((from + 2) % 4) as RotationState;
-    }
+    if (direction === 'cw') to = ((from + 1) % 4) as RotationState;
+    else if (direction === 'ccw') to = ((from + 3) % 4) as RotationState;
+    else to = ((from + 2) % 4) as RotationState;
 
     const newShapeOffsets = PIECE_SHAPES[piece.type][to];
     const kicks = getKicks(piece.type, from, to);
@@ -206,24 +160,17 @@ export function createGame(dateStr: string, settings: Settings, onEvent?: GameEv
     for (const [dx, dy] of kicks) {
       const newCol = piece.col + dx;
       const newRow = piece.row + dy;
-
       if (isValidPosition(state.board, newShapeOffsets, newRow, newCol)) {
         const oldColors = piece.tiles.map(t => t.color);
-
-        // For O-piece: cycle colors since shape is identical across states.
-        // For all other pieces: colors stay bound to physical tile via index.
         const useIdentity = piece.type !== 'O';
         const colorShift = useIdentity ? 0
           : direction === 'cw' ? 1 : direction === 'ccw' ? 3 : 2;
         const n = piece.tiles.length;
 
-        const newTiles: PieceTile[] = newShapeOffsets.map((offset, i) => ({
-          row: offset[0],
-          col: offset[1],
+        piece.tiles = newShapeOffsets.map((offset, i) => ({
+          row: offset[0], col: offset[1],
           color: oldColors[(i + colorShift) % n],
         }));
-
-        piece.tiles = newTiles;
         piece.rotation = to;
         piece.row = newRow;
         piece.col = newCol;
@@ -240,62 +187,14 @@ export function createGame(dateStr: string, settings: Settings, onEvent?: GameEv
     return isValidPosition(state.board, offsets, state.activePiece.row - 1, state.activePiece.col);
   }
 
-  // T-spin detection: 3-corner rule
-  // After a T-piece locks via rotation, check 4 corners of its 3x3 bounding box
-  function detectTSpin(piece: ActivePiece): boolean {
-    if (piece.type !== 'T') return false;
-    if (!lastActionWasRotation) return false;
-
-    // The T-piece center is at bounding box position [1,1] relative to origin
-    // Corners of the 3x3 box: [0,0], [0,2], [2,0], [2,2]
-    const corners: [number, number][] = [
-      [piece.row + 0, piece.col + 0],
-      [piece.row + 0, piece.col + 2],
-      [piece.row + 2, piece.col + 0],
-      [piece.row + 2, piece.col + 2],
-    ];
-
-    let occupied = 0;
-    for (const [r, c] of corners) {
-      if (r < 0 || r >= BOARD_HEIGHT || c < 0 || c >= BOARD_WIDTH) {
-        occupied++; // out of bounds = occupied
-      } else if (state.board[r][c] !== null) {
-        occupied++;
-      }
-    }
-
-    return occupied >= 3;
-  }
-
   function lockCurrentPiece(): void {
     if (!state.activePiece) return;
     const piece = state.activePiece;
 
-    // Handle bombs: explode instead of normal lock
-    if (isBombType(piece.type)) {
-      const bombRow = piece.row + piece.tiles[0].row;
-      const bombCol = piece.col + piece.tiles[0].col;
-      const bt = piece.type as 'BOMB_ROW' | 'BOMB_COL' | 'BOMB_3X3';
-      onEvent?.({ type: 'bombExplode', row: bombRow, col: bombCol, bombType: bt });
-      const bombResult = explodeBomb(state.board, bombRow, bombCol, bt);
-      state.board = bombResult.board;
-      // Score tiles destroyed by bomb (+100 each)
-      state.score = updateScore(state.score, 0, false, bombResult.cellsDestroyed);
-      state.activePiece = null;
-      state.canHold = true;
-      if (!spawnPiece()) {
-        state.phase = 'gameover';
-      }
-      return;
-    }
-
-    // Detect T-spin BEFORE locking (check against board without this piece)
-    const tSpin = detectTSpin(piece);
-
-    // Lock the piece onto the board
+    // Lock onto board
     state.board = lockPiece(state.board, piece);
 
-    // Check lock-out: any tile in spawn zone (rows >= VISIBLE_HEIGHT)
+    // Check lock-out
     for (const tile of piece.tiles) {
       const r = piece.row + tile.row;
       if (r >= VISIBLE_HEIGHT) {
@@ -305,30 +204,28 @@ export function createGame(dateStr: string, settings: Settings, onEvent?: GameEv
       }
     }
 
-    // Evaluate lines
-    const result = evaluateLines(state.board, state.lockedRowCount);
-    if (result.clearedRowIndices.length > 0) {
-      onEvent?.({ type: 'lineClear', rows: result.clearedRowIndices });
-    }
-    if (result.penaltyRowIndices.length > 0) {
-      onEvent?.({ type: 'penalty', rows: result.penaltyRowIndices });
-    }
+    // Evaluate sudoku clears around newly placed tiles
+    const newPositions = piece.tiles.map(t => ({
+      row: piece.row + t.row,
+      col: piece.col + t.col,
+    }));
+    const result = evaluateSudokuClears(state.board, newPositions);
     state.board = result.board;
-    state.lockedRowCount = result.lockedRowCount;
-    state.score = updateScore(state.score, result.linesCleared, tSpin, result.tilesCleared);
+
+    if (result.clearedCells.length > 0) {
+      onEvent?.({ type: 'sudokuClear', cells: result.clearedCells });
+    }
+
+    state.score = updateScore(state.score, result.clears);
 
     state.activePiece = null;
-    state.canHold = true; // reset hold lock on piece lock
+    state.canHold = true;
 
-    // Spawn next piece
-    if (!spawnPiece()) {
-      state.phase = 'gameover'; // blockout
-    }
+    if (!spawnPiece()) { state.phase = 'gameover'; }
   }
 
   function handleAction(action: InputAction): void {
     if (state.phase !== 'playing' || !state.activePiece) return;
-
     let moved = false;
 
     switch (action) {
@@ -359,13 +256,15 @@ export function createGame(dateStr: string, settings: Settings, onEvent?: GameEv
         }
         return;
       case 'softDrop':
+        // With 0 gravity, soft drop moves piece down one row
+        if (canMoveDown()) tryMove(-1, 0);
         return;
       case 'hold':
         holdCurrentPiece();
         return;
     }
 
-    // Reset lock delay on successful move/rotate (if active)
+    // Reset lock delay on successful move/rotate
     if (moved && state.lockDelay.active && state.lockDelay.resets < MAX_LOCK_RESETS) {
       state.lockDelay.timer = 0;
       state.lockDelay.resets++;
@@ -375,21 +274,18 @@ export function createGame(dateStr: string, settings: Settings, onEvent?: GameEv
   function tick(dt: number): void {
     if (state.phase !== 'playing') return;
 
-    // Update timer
+    // Timer
     state.timeRemaining -= dt;
     if (state.timeRemaining <= 0) {
       state.timeRemaining = 0;
-      // Lock piece immediately, evaluate, then gameover
-      if (state.activePiece) {
-        lockCurrentPiece();
-      }
+      if (state.activePiece) lockCurrentPiece();
       state.phase = 'gameover';
       return;
     }
 
     if (!state.activePiece) return;
 
-    // Process input actions from DAS/ARR
+    // Process DAS/ARR input
     inputProcessor.update(dt);
     const actions = inputProcessor.getActions();
     for (const action of actions) {
@@ -397,65 +293,28 @@ export function createGame(dateStr: string, settings: Settings, onEvent?: GameEv
       if (state.phase !== 'playing') return;
     }
 
-    state.softDropping = inputProcessor.isSoftDropping();
-
-    // Gravity
-    if (state.softDropping && settings.handling.sdf === Infinity) {
-      // Instant soft drop: move piece all the way down
-      if (state.activePiece) {
-        while (canMoveDown()) {
-          tryMove(-1, 0);
-        }
-        if (!state.lockDelay.active) {
-          state.lockDelay.active = true;
-          state.lockDelay.timer = 0;
-        }
+    // No gravity — pieces only move via input
+    // But still handle lock delay when piece is resting on surface
+    if (!canMoveDown()) {
+      if (!state.lockDelay.active) {
+        state.lockDelay.active = true;
+        state.lockDelay.timer = 0;
       }
-      gravityAccumulator = 0;
-    } else {
-      const gravityInterval = state.softDropping
-        ? GRAVITY_INTERVAL / settings.handling.sdf
-        : GRAVITY_INTERVAL;
-
-      gravityAccumulator += dt;
-
-      while (gravityAccumulator >= gravityInterval && state.activePiece) {
-        gravityAccumulator -= gravityInterval;
-
-        if (canMoveDown()) {
-          tryMove(-1, 0);
-          if (!canMoveDown() && !state.lockDelay.active) {
-            state.lockDelay.active = true;
-            state.lockDelay.timer = 0;
-          }
-        } else {
-          if (!state.lockDelay.active) {
-            state.lockDelay.active = true;
-            state.lockDelay.timer = 0;
-          }
-        }
-      }
+    } else if (state.lockDelay.active) {
+      state.lockDelay.active = false;
+      state.lockDelay.timer = 0;
     }
 
-    // Lock delay
     if (state.lockDelay.active && state.activePiece) {
-      // If piece can now move down (e.g., row below cleared), deactivate lock delay
-      if (canMoveDown()) {
-        state.lockDelay.active = false;
-        state.lockDelay.timer = 0;
-      } else {
-        state.lockDelay.timer += dt;
-        if (state.lockDelay.timer >= LOCK_DELAY || state.lockDelay.resets >= MAX_LOCK_RESETS) {
-          lockCurrentPiece();
-        }
+      state.lockDelay.timer += dt;
+      if (state.lockDelay.timer >= LOCK_DELAY || state.lockDelay.resets >= MAX_LOCK_RESETS) {
+        lockCurrentPiece();
       }
     }
   }
 
   function inputKeyDown(action: InputAction): void {
     if (state.phase !== 'playing') return;
-
-    // Immediate actions (not DAS/ARR controlled)
     if (action === 'rotateCW' || action === 'rotateCCW' || action === 'rotate180' || action === 'hardDrop' || action === 'hold') {
       handleAction(action);
     } else {

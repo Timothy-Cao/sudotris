@@ -126,7 +126,7 @@ export default function Home() {
                   {gameState.score.score.toLocaleString()}
                 </p>
                 <p className="text-sm text-gray-400">
-                  {gameState.score.linesCleared} lines cleared
+                  {gameState.score.linesCleared} sudoku clears
                 </p>
                 {gameState.score.score > bestScore && gameState.score.score > 0 && (
                   <p className="text-green-400 text-sm mt-1">New Best!</p>

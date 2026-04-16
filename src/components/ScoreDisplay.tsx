@@ -14,7 +14,7 @@ export default function ScoreDisplay({ score, linesCleared, combo }: ScoreDispla
         <div className="text-2xl font-mono font-bold">{score.toLocaleString()}</div>
       </div>
       <div>
-        <div className="text-xs uppercase tracking-wider text-gray-400">Lines</div>
+        <div className="text-xs uppercase tracking-wider text-gray-400">Clears</div>
         <div className="text-xl font-mono">{linesCleared}</div>
       </div>
       {combo > 0 && (
