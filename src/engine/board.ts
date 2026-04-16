@@ -60,7 +60,7 @@ function makeGrayRow(): Cell[] {
 export function evaluateLines(
   board: Board,
   lockedRowCount: number
-): { board: Board; lockedRowCount: number; linesCleared: number } {
+): { board: Board; lockedRowCount: number; linesCleared: number; tilesCleared: number } {
   const newBoard = board.map(row => [...row]);
 
   // Step 1: identify full rows above the locked zone
@@ -94,10 +94,14 @@ export function evaluateLines(
     newLockedCount++;
   }
 
+  // All removed rows had BOARD_WIDTH tiles each
+  const tilesCleared = allRemoveRows.length * BOARD_WIDTH;
+
   return {
     board: newBoard,
     lockedRowCount: newLockedCount,
     linesCleared: clearRows.length,
+    tilesCleared,
   };
 }
 

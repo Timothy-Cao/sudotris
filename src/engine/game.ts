@@ -273,7 +273,8 @@ export function createGame(dateStr: string, settings: Settings) {
         piece.type as 'BOMB_ROW' | 'BOMB_COL' | 'BOMB_3X3'
       );
       state.board = bombResult.board;
-      // Don't evaluate lines after bomb — explosion handles cleanup
+      // Score tiles destroyed by bomb (+100 each)
+      state.score = updateScore(state.score, 0, false, bombResult.cellsDestroyed);
       state.activePiece = null;
       state.canHold = true;
       if (!spawnPiece()) {
@@ -302,7 +303,7 @@ export function createGame(dateStr: string, settings: Settings) {
     const result = evaluateLines(state.board, state.lockedRowCount);
     state.board = result.board;
     state.lockedRowCount = result.lockedRowCount;
-    state.score = updateScore(state.score, result.linesCleared, tSpin);
+    state.score = updateScore(state.score, result.linesCleared, tSpin, result.tilesCleared);
 
     state.activePiece = null;
     state.canHold = true; // reset hold lock on piece lock

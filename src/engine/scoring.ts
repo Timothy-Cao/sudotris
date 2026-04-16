@@ -10,45 +10,49 @@ export function createScoreState(): ScoreState {
   };
 }
 
-// Base points for line clears
+// Base points for line clears (x1000)
 function basePoints(lines: number, tSpin: boolean): number {
   if (tSpin) {
-    // T-spin single = double points, T-spin double = quad points
-    if (lines === 1) return 2;  // T-spin single -> double
-    if (lines === 2) return 8;  // T-spin double -> quad
-    // T-spin triple etc. — just treat as high value
-    return lines * 4;
+    if (lines === 1) return 2000;  // T-spin single -> double value
+    if (lines === 2) return 8000;  // T-spin double -> quad value
+    return lines * 4000;
   }
 
   switch (lines) {
-    case 1: return 1;
-    case 2: return 2;
-    case 3: return 3;
-    case 4: return 8;  // quad
-    default: return lines * 2;
+    case 1: return 1000;
+    case 2: return 2000;
+    case 3: return 3000;
+    case 4: return 8000;  // quad
+    default: return lines * 2000;
   }
 }
 
 // Combo modifier: combo count is 1-indexed (first consecutive clear = combo 1)
-// Pattern: +1, +1, *2, *2, *3, *3, *4, *4, *5, *5, ..., caps at *8
-// combo 1: +1, combo 2: +1, combo 3: *2, combo 4: *2, combo 5: *3, combo 6: *3, etc.
+// Pattern: +1000, +1000, *2, *2, *3, *3, *4, *4, ..., caps at *8
 function applyCombo(points: number, combo: number): number {
   if (combo <= 0) return points;
-  if (combo <= 2) return points + 1;              // +1 for combos 1-2
-  const tier = Math.floor((combo - 1) / 2);       // 1,1,2,2,3,3,...
-  const multiplier = Math.min(tier, 8);            // cap at *8
+  if (combo <= 2) return points + 1000;
+  const tier = Math.floor((combo - 1) / 2);
+  const multiplier = Math.min(tier, 8);
   return points * multiplier;
 }
+
+// +100 per tile cleared
+const POINTS_PER_TILE = 100;
 
 export function updateScore(
   state: ScoreState,
   linesClearedThisLock: number,
-  tSpin: boolean = false
+  tSpin: boolean = false,
+  tilesCleared: number = 0
 ): ScoreState {
+  // Tile bonus applies regardless of line clears (bombs, etc.)
+  const tileBonus = tilesCleared * POINTS_PER_TILE;
+
   if (linesClearedThisLock === 0) {
-    // No clear: reset combo
     return {
       ...state,
+      score: state.score + tileBonus,
       combo: 0,
       lastClearCount: 0,
       tSpin: false,
@@ -57,7 +61,7 @@ export function updateScore(
 
   const newCombo = state.combo + 1;
   const base = basePoints(linesClearedThisLock, tSpin);
-  const points = applyCombo(base, newCombo);
+  const points = applyCombo(base, newCombo) + tileBonus;
 
   return {
     score: state.score + points,
