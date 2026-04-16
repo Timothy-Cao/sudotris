@@ -26,18 +26,19 @@ Daily puzzle game: Sudoku color-uniqueness constraint meets Tetris stacking mech
 - Cannot be cleared — permanently consume playfield space
 - Shift down when rows below them are cleared
 
-### Line Clear Logic (evaluated bottom-up after each piece lock)
+### Line Clear Logic (evaluated after each piece lock)
 
-1. Is the row full (all 6 cells occupied)?
-2. Yes + all 6 colors unique → clear the row, everything above shifts down (including locked rows)
-3. Yes + colors not unique → the lowest non-locked row becomes locked
-4. Multiple full rows evaluated independently in a single frame
+1. Scan all rows. Mark each full row (all 6 cells occupied) as either "clear" (6 unique colors) or "penalty" (duplicate colors).
+2. Remove all "clear" rows simultaneously, shift everything above down.
+3. For each "penalty" row (re-checked after shift): that row itself becomes locked.
+4. If multiple penalty rows exist, all of them become locked.
 
 ### Pieces
 
 - Standard 7 tetrominoes: I, O, T, S, Z, J, L
 - 4x4 bounding box representation with rotation states
 - Each piece's 4 tiles assigned 4 distinct colors (sampled without replacement from 1-6) at spawn time
+- Colors assigned in row-major order within the bounding box (top-to-bottom, left-to-right), skipping empty cells
 - Colors are bound to tile positions within the bounding box and rotate with the piece
 
 ### Piece Bag
@@ -102,11 +103,12 @@ Daily puzzle game: Sudoku color-uniqueness constraint meets Tetris stacking mech
 ### Timer
 
 - 5-minute countdown, displayed prominently
-- Game ends when timer reaches 0
+- When timer reaches 0: active piece locks immediately at current position, any resulting line clears are counted, then game ends
 
 ### Top-Out
 
-- If any tile of a locking piece occupies rows 18-20 (spawn zone), game over immediately
+- **Lock-out**: If any tile of a locking piece occupies rows 18-20 (spawn zone), game over immediately
+- **Block-out**: If a newly spawned piece overlaps occupied cells, game over immediately
 
 ### Game States
 
@@ -117,15 +119,17 @@ Daily puzzle game: Sudoku color-uniqueness constraint meets Tetris stacking mech
 ### Next Piece Preview
 
 - Single next piece shown beside the board (expandable to hold queue later)
+- No hold piece in MVP
 
 ## Scoring
 
 - 1 point per line cleared
 - Game state tracks (for future multiplier infrastructure):
-  - Combo counter (consecutive lock-downs that clear at least one line)
-  - T-spin detection flag
-  - Lines cleared per lock (single/double/triple/tetris)
+  - Combo counter (consecutive lock-downs that clear at least one line; resets to 0 on a lock with no clears)
+  - T-spin detection flag (algorithm TBD, stubbed as always-false for MVP)
+  - Lines cleared per lock (1/2/3/4 count)
 - These are tracked but not scored in MVP
+- MVP uses localStorage only; replay prevention is out of scope
 
 ## UI
 
