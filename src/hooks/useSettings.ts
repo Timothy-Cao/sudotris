@@ -19,6 +19,7 @@ export function useSettings() {
           keyBindings: { ...DEFAULT_SETTINGS.keyBindings, ...parsed.keyBindings },
           handling: { ...DEFAULT_SETTINGS.handling, ...parsed.handling },
           showNumbers: parsed.showNumbers ?? DEFAULT_SETTINGS.showNumbers,
+          ghostOpacity: parsed.ghostOpacity ?? DEFAULT_SETTINGS.ghostOpacity,
         });
       } catch {
         // use defaults
@@ -33,6 +34,7 @@ export function useSettings() {
         keyBindings: { ...prev.keyBindings, ...partial.keyBindings },
         handling: { ...prev.handling, ...partial.handling },
         showNumbers: partial.showNumbers ?? prev.showNumbers,
+        ghostOpacity: partial.ghostOpacity ?? prev.ghostOpacity,
       };
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
       return next;

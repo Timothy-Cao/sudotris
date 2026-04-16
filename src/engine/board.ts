@@ -65,32 +65,31 @@ export function evaluateLines(
 
   // Step 1: identify full rows above the locked zone
   const clearRows: number[] = [];
-  let penaltyCount = 0;
+  const penaltyRows: number[] = [];
 
   for (let r = lockedRowCount; r < VISIBLE_HEIGHT; r++) {
     if (isRowFull(newBoard, r)) {
       if (hasUniqueColors(newBoard, r)) {
         clearRows.push(r);
       } else {
-        penaltyCount++;
+        penaltyRows.push(r);
       }
     }
   }
 
-  // Step 2: remove clear rows (top-down to keep indices stable)
-  const sortedClears = [...clearRows].sort((a, b) => b - a);
-  for (const r of sortedClears) {
+  // Step 2: remove clear rows AND penalty rows (both get deleted).
+  // Sort all rows to remove descending so indices stay stable.
+  const allRemoveRows = [...clearRows, ...penaltyRows].sort((a, b) => b - a);
+  for (const r of allRemoveRows) {
     newBoard.splice(r, 1);
     newBoard.push(new Array<Cell>(BOARD_WIDTH).fill(null));
   }
 
-  // Step 3: for each penalty, insert a gray row at the bottom (row 0)
-  // and push everything up by 1. This shrinks playable space from below.
+  // Step 3: for each penalty row, insert a gray row at the bottom (row 0).
+  // This frees the holes underneath the penalty row but adds gray at bottom.
   let newLockedCount = lockedRowCount;
-  for (let p = 0; p < penaltyCount; p++) {
-    // Remove the topmost row (it falls off)
+  for (let p = 0; p < penaltyRows.length; p++) {
     newBoard.pop();
-    // Insert gray row at position 0
     newBoard.splice(0, 0, makeGrayRow());
     newLockedCount++;
   }
@@ -100,6 +99,67 @@ export function evaluateLines(
     lockedRowCount: newLockedCount,
     linesCleared: clearRows.length,
   };
+}
+
+// Bomb explosion: clear cells in the blast zone, then apply gravity
+// Returns cells destroyed count for potential scoring
+export function explodeBomb(
+  board: Board,
+  bombRow: number,
+  bombCol: number,
+  bombType: 'BOMB_ROW' | 'BOMB_COL' | 'BOMB_3X3'
+): { board: Board; cellsDestroyed: number } {
+  const newBoard = board.map(row => [...row]);
+  let destroyed = 0;
+
+  if (bombType === 'BOMB_ROW') {
+    // Clear entire row
+    for (let c = 0; c < BOARD_WIDTH; c++) {
+      if (newBoard[bombRow][c] !== null && !isGrayCell(newBoard[bombRow][c])) {
+        newBoard[bombRow][c] = null;
+        destroyed++;
+      }
+    }
+  } else if (bombType === 'BOMB_COL') {
+    // Clear entire column
+    for (let r = 0; r < BOARD_HEIGHT; r++) {
+      if (newBoard[r][bombCol] !== null && !isGrayCell(newBoard[r][bombCol])) {
+        newBoard[r][bombCol] = null;
+        destroyed++;
+      }
+    }
+  } else {
+    // BOMB_3X3: clear 3x3 area centered on bomb
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        const r = bombRow + dr;
+        const c = bombCol + dc;
+        if (r >= 0 && r < BOARD_HEIGHT && c >= 0 && c < BOARD_WIDTH) {
+          if (newBoard[r][c] !== null && !isGrayCell(newBoard[r][c])) {
+            newBoard[r][c] = null;
+            destroyed++;
+          }
+        }
+      }
+    }
+  }
+
+  // The bomb itself is already cleared (it was in the blast zone)
+  // Apply gravity: cells above empty spaces drop down
+  for (let c = 0; c < BOARD_WIDTH; c++) {
+    let writeIdx = 0;
+    for (let r = 0; r < BOARD_HEIGHT; r++) {
+      if (newBoard[r][c] !== null) {
+        if (r !== writeIdx) {
+          newBoard[writeIdx][c] = newBoard[r][c];
+          newBoard[r][c] = null;
+        }
+        writeIdx++;
+      }
+    }
+  }
+
+  return { board: newBoard, cellsDestroyed: destroyed };
 }
 
 export function getGhostRow(

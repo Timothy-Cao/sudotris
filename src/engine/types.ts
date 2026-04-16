@@ -1,5 +1,5 @@
 // Piece shape identifiers
-export type PieceType = 'I' | 'O' | 'T' | 'S' | 'Z' | 'J' | 'L';
+export type PieceType = 'I' | 'O' | 'T' | 'S' | 'Z' | 'J' | 'L' | 'BOMB_ROW' | 'BOMB_COL' | 'BOMB_3X3';
 
 // Rotation states (SRS standard): 0=spawn, 1=R(CW), 2=180, 3=L(CCW)
 export type RotationState = 0 | 1 | 2 | 3;
@@ -62,6 +62,7 @@ export interface Settings {
   keyBindings: KeyBindings;
   handling: HandlingConfig;
   showNumbers: boolean;
+  ghostOpacity: number; // 0-100, default 30
 }
 
 // Game phases
@@ -121,10 +122,11 @@ export const DEFAULT_SETTINGS: Settings = {
   keyBindings: DEFAULT_KEY_BINDINGS,
   handling: DEFAULT_HANDLING,
   showNumbers: true,
+  ghostOpacity: 30,
 };
 
 // Game constants
 export const GAME_DURATION = 5 * 60 * 1000;
-export const GRAVITY_INTERVAL = 1000;
+export const GRAVITY_INTERVAL = 2000;        // 0.5 rows per second
 export const LOCK_DELAY = 500;
 export const MAX_LOCK_RESETS = 15;

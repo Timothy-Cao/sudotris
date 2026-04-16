@@ -59,6 +59,7 @@ export default function SettingsPage() {
           keyBindings: { ...DEFAULT_SETTINGS.keyBindings, ...parsed.keyBindings },
           handling: { ...DEFAULT_SETTINGS.handling, ...parsed.handling },
           showNumbers: parsed.showNumbers ?? DEFAULT_SETTINGS.showNumbers,
+          ghostOpacity: parsed.ghostOpacity ?? DEFAULT_SETTINGS.ghostOpacity,
         });
       } catch {
         // use defaults
@@ -224,6 +225,22 @@ export default function SettingsPage() {
             />
             <span className="text-sm">Show color numbers on tiles</span>
           </label>
+
+          <div className="mt-4">
+            <div className="flex justify-between text-sm mb-1">
+              <span>Ghost Piece Opacity</span>
+              <span className="font-mono text-gray-400">{settings.ghostOpacity}%</span>
+            </div>
+            <input
+              type="range"
+              min={5}
+              max={100}
+              step={5}
+              value={settings.ghostOpacity}
+              onChange={e => save({ ...settings, ghostOpacity: Number(e.target.value) })}
+              className="w-full accent-indigo-500"
+            />
+          </div>
         </section>
 
         {/* Reset */}

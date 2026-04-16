@@ -5,12 +5,11 @@ import {
   BOARD_WIDTH,
   VISIBLE_HEIGHT,
 } from '../engine/types';
-import { PIECE_SHAPES } from '../engine/pieces';
+import { PIECE_SHAPES, isBombType } from '../engine/pieces';
 import { isGrayCell } from '../engine/board';
 import {
   TILE_COLORS,
   TILE_BORDER_COLORS,
-  GHOST_ALPHA,
   LOCKED_ROW_COLOR,
   LOCKED_ROW_BORDER,
   BOARD_BG,
@@ -27,9 +26,13 @@ function boardRowToCanvasY(row: number): number {
   return (TOTAL_VISIBLE_ROWS - 1 - row) * CELL_SIZE;
 }
 
-// Track whether to show numbers (set before each drawBoard call)
+// Render settings (set before each drawBoard call)
 let _showNumbers = false;
-export function setShowNumbers(show: boolean) { _showNumbers = show; }
+let _ghostAlpha = 0.3;
+export function setRenderSettings(showNumbers: boolean, ghostOpacity: number) {
+  _showNumbers = showNumbers;
+  _ghostAlpha = ghostOpacity / 100;
+}
 
 function drawTileAt(
   ctx: CanvasRenderingContext2D,
@@ -68,6 +71,39 @@ function drawTileAt(
     ctx.fillStyle = `rgba(255,255,255,${alpha * 0.95})`;
     ctx.fillText(String(color), cx, cy);
   }
+
+  ctx.globalAlpha = 1;
+}
+
+const BOMB_EMOJIS: Record<string, string> = {
+  BOMB_ROW: '💥',   // horizontal explosion
+  BOMB_COL: '🧨',   // vertical explosion
+  BOMB_3X3: '💣',   // area explosion
+};
+
+function drawBombAt(
+  ctx: CanvasRenderingContext2D,
+  canvasX: number,
+  canvasY: number,
+  bombType: PieceType,
+  size: number,
+  alpha: number = 1
+): void {
+  ctx.globalAlpha = alpha;
+
+  // Dark background
+  ctx.fillStyle = '#1a0a0a';
+  ctx.fillRect(canvasX + 1, canvasY + 1, size - 2, size - 2);
+  ctx.strokeStyle = '#FF4444';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(canvasX + 1, canvasY + 1, size - 2, size - 2);
+
+  // Emoji
+  const emoji = BOMB_EMOJIS[bombType] || '💣';
+  ctx.font = `${Math.floor(size * 0.6)}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(emoji, canvasX + size / 2, canvasY + size / 2);
 
   ctx.globalAlpha = 1;
 }
@@ -130,26 +166,36 @@ export function drawBoard(ctx: CanvasRenderingContext2D, state: GameState): void
 
   // Draw ghost piece
   if (activePiece && ghostRow !== null && ghostRow !== activePiece.row) {
+    const isBomb = isBombType(activePiece.type);
     for (const tile of activePiece.tiles) {
       const r = ghostRow + tile.row;
       const c = activePiece.col + tile.col;
       if (r >= 0 && r < TOTAL_VISIBLE_ROWS && c >= 0 && c < BOARD_WIDTH) {
         const cx = c * CELL_SIZE;
         const cy = boardRowToCanvasY(r);
-        drawTileAt(ctx, cx, cy, tile.color, GHOST_ALPHA);
+        if (isBomb) {
+          drawBombAt(ctx, cx, cy, activePiece.type, CELL_SIZE, _ghostAlpha);
+        } else {
+          drawTileAt(ctx, cx, cy, tile.color, _ghostAlpha);
+        }
       }
     }
   }
 
   // Draw active piece
   if (activePiece) {
+    const isBomb = isBombType(activePiece.type);
     for (const tile of activePiece.tiles) {
       const r = activePiece.row + tile.row;
       const c = activePiece.col + tile.col;
       if (r >= 0 && r < TOTAL_VISIBLE_ROWS && c >= 0 && c < BOARD_WIDTH) {
         const cx = c * CELL_SIZE;
         const cy = boardRowToCanvasY(r);
-        drawTileAt(ctx, cx, cy, tile.color);
+        if (isBomb) {
+          drawBombAt(ctx, cx, cy, activePiece.type, CELL_SIZE);
+        } else {
+          drawTileAt(ctx, cx, cy, tile.color);
+        }
       }
     }
   }
@@ -191,22 +237,43 @@ export function drawNextPieces(
     const offsetX = (width - pieceW) / 2;
     const offsetY = slotY + (slotHeight - pieceH) / 2;
 
-    offsets.forEach((offset: [number, number], i: number) => {
-      const [r, c] = offset;
-      const cx = offsetX + (c - minC) * PREVIEW_CELL;
-      const cy = offsetY + (maxR - r) * PREVIEW_CELL;
-      const color = piece.colors[i];
-
-      // Fade subsequent previews slightly
+    const isBomb = isBombType(piece.type);
+    if (isBomb) {
+      const cx = (width - PREVIEW_CELL) / 2;
+      const cy = slotY + (slotHeight - PREVIEW_CELL) / 2;
       const alpha = idx === 0 ? 1 : 0.6;
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = TILE_COLORS[color];
-      ctx.fillRect(cx + 1, cy + 1, PREVIEW_CELL - 2, PREVIEW_CELL - 2);
+      drawBombAt(ctx, cx, cy, piece.type, PREVIEW_CELL, alpha);
+    } else {
+      offsets.forEach((offset: [number, number], i: number) => {
+        const [r, c] = offset;
+        const cx = offsetX + (c - minC) * PREVIEW_CELL;
+        const cy = offsetY + (maxR - r) * PREVIEW_CELL;
+        const color = piece.colors[i];
 
-      ctx.strokeStyle = TILE_BORDER_COLORS[color];
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(cx + 1, cy + 1, PREVIEW_CELL - 2, PREVIEW_CELL - 2);
-    });
+        const alpha = idx === 0 ? 1 : 0.6;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = TILE_COLORS[color];
+        ctx.fillRect(cx + 1, cy + 1, PREVIEW_CELL - 2, PREVIEW_CELL - 2);
+
+        ctx.strokeStyle = TILE_BORDER_COLORS[color];
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(cx + 1, cy + 1, PREVIEW_CELL - 2, PREVIEW_CELL - 2);
+
+        if (_showNumbers) {
+          const fontSize = Math.floor(PREVIEW_CELL * 0.45);
+          const tx = cx + PREVIEW_CELL / 2;
+          const ty = cy + PREVIEW_CELL / 2;
+          ctx.font = `bold ${fontSize}px monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.strokeStyle = `rgba(0,0,0,${alpha * 0.7})`;
+          ctx.lineWidth = 2;
+          ctx.strokeText(String(color), tx, ty);
+          ctx.fillStyle = `rgba(255,255,255,${alpha * 0.95})`;
+          ctx.fillText(String(color), tx, ty);
+        }
+      });
+    }
     ctx.globalAlpha = 1;
   });
 }
@@ -237,18 +304,38 @@ export function drawHoldPiece(
   const offsetY = (height - pieceH) / 2;
   const alpha = canHold ? 1 : 0.35;
 
-  offsets.forEach((offset: [number, number], i: number) => {
-    const [r, c] = offset;
-    const cx = offsetX + (c - minC) * PREVIEW_CELL;
-    const cy = offsetY + (maxR - r) * PREVIEW_CELL;
-    const color = piece.colors[i];
+  if (isBombType(piece.type)) {
+    const cx = (width - PREVIEW_CELL) / 2;
+    const cy = (height - PREVIEW_CELL) / 2;
+    drawBombAt(ctx, cx, cy, piece.type, PREVIEW_CELL, alpha);
+  } else {
+    offsets.forEach((offset: [number, number], i: number) => {
+      const [r, c] = offset;
+      const cx = offsetX + (c - minC) * PREVIEW_CELL;
+      const cy = offsetY + (maxR - r) * PREVIEW_CELL;
+      const color = piece.colors[i];
 
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = TILE_COLORS[color];
-    ctx.fillRect(cx + 1, cy + 1, PREVIEW_CELL - 2, PREVIEW_CELL - 2);
-    ctx.strokeStyle = TILE_BORDER_COLORS[color];
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(cx + 1, cy + 1, PREVIEW_CELL - 2, PREVIEW_CELL - 2);
-  });
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = TILE_COLORS[color];
+      ctx.fillRect(cx + 1, cy + 1, PREVIEW_CELL - 2, PREVIEW_CELL - 2);
+      ctx.strokeStyle = TILE_BORDER_COLORS[color];
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(cx + 1, cy + 1, PREVIEW_CELL - 2, PREVIEW_CELL - 2);
+
+      if (_showNumbers) {
+        const fontSize = Math.floor(PREVIEW_CELL * 0.45);
+        const tx = cx + PREVIEW_CELL / 2;
+        const ty = cy + PREVIEW_CELL / 2;
+        ctx.font = `bold ${fontSize}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.strokeStyle = `rgba(0,0,0,${alpha * 0.7})`;
+        ctx.lineWidth = 2;
+        ctx.strokeText(String(color), tx, ty);
+        ctx.fillStyle = `rgba(255,255,255,${alpha * 0.95})`;
+        ctx.fillText(String(color), tx, ty);
+      }
+    });
+  }
   ctx.globalAlpha = 1;
 }

@@ -1,6 +1,8 @@
 import { Rng } from './rng';
 import { PieceType, TileColor, NUM_COLORS } from './types';
-import { getRowMajorTiles } from './pieces';
+
+const BOMB_TYPES: PieceType[] = ['BOMB_ROW', 'BOMB_COL', 'BOMB_3X3'];
+const BOMB_INTERVAL = 10; // every 10th piece is a bomb
 
 export interface BagPiece {
   type: PieceType;
@@ -10,6 +12,7 @@ export interface BagPiece {
 export function createBag(rng: Rng) {
   let queue: PieceType[] = [];
   const buffer: BagPiece[] = [];
+  let pieceCount = 0;
 
   function refill() {
     const bag: PieceType[] = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'];
@@ -18,13 +21,18 @@ export function createBag(rng: Rng) {
   }
 
   function generatePiece(): BagPiece {
+    pieceCount++;
+
+    // Every 10th piece is a bomb
+    if (pieceCount % BOMB_INTERVAL === 0) {
+      const bombType = BOMB_TYPES[Math.floor(rng.next() * BOMB_TYPES.length)];
+      return { type: bombType, colors: [] }; // bombs have no colors
+    }
+
     if (queue.length === 0) refill();
     const type = queue.shift()!;
     const allColors: TileColor[] = Array.from({ length: NUM_COLORS }, (_, i) => (i + 1) as TileColor);
-    // Sample 4 unique colors
     const colors = rng.sampleWithout(allColors, 4) as TileColor[];
-    // Colors map to tiles in row-major order of the spawn rotation (state 0)
-    // The caller uses getRowMajorTiles to assign colors to tile offsets
     return { type, colors };
   }
 

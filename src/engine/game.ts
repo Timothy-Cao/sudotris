@@ -17,7 +17,8 @@ import {
   Settings,
 } from './types';
 import { createRng, dateSeed, Rng } from './rng';
-import { createBoard, isValidPosition, lockPiece, evaluateLines, getGhostRow } from './board';
+import { createBoard, isValidPosition, lockPiece, evaluateLines, explodeBomb, getGhostRow } from './board';
+import { isBombType } from './pieces';
 import { createBag, Bag } from './bag';
 import { PIECE_SHAPES, getKicks, getSpawnCol, getSpawnRow } from './pieces';
 import { createScoreState, updateScore } from './scoring';
@@ -54,12 +55,11 @@ export function createGame(dateStr: string, settings: Settings) {
     const spawnCol = getSpawnCol(type);
 
     // Assign colors to tiles by their index in PIECE_SHAPES.
-    // Index is stable across rotation states, so colors follow their physical block.
     const shapeOffsets = PIECE_SHAPES[type][0];
     const tiles: PieceTile[] = shapeOffsets.map((offset, i) => ({
       row: offset[0],
       col: offset[1],
-      color: colors[i],
+      color: colors[i] || (0 as TileColor), // bombs use 0 (rendered specially)
     }));
 
     const tileOffsets = tiles.map(t => [t.row, t.col] as [number, number]);
@@ -201,11 +201,14 @@ export function createGame(dateStr: string, settings: Settings) {
       const newRow = piece.row + dy;
 
       if (isValidPosition(state.board, newShapeOffsets, newRow, newCol)) {
-        // Cycle colors on rotation so even identical shapes (O-piece) rotate colors.
-        // CW: shift colors forward by 1, CCW: back by 1, 180: by 2.
-        const colorShift = direction === 'cw' ? 1 : direction === 'ccw' ? 3 : 2;
-        const n = piece.tiles.length;
         const oldColors = piece.tiles.map(t => t.color);
+
+        // For O-piece: cycle colors since shape is identical across states.
+        // For all other pieces: colors stay bound to physical tile via index.
+        const useIdentity = piece.type !== 'O';
+        const colorShift = useIdentity ? 0
+          : direction === 'cw' ? 1 : direction === 'ccw' ? 3 : 2;
+        const n = piece.tiles.length;
 
         const newTiles: PieceTile[] = newShapeOffsets.map((offset, i) => ({
           row: offset[0],
@@ -260,6 +263,24 @@ export function createGame(dateStr: string, settings: Settings) {
   function lockCurrentPiece(): void {
     if (!state.activePiece) return;
     const piece = state.activePiece;
+
+    // Handle bombs: explode instead of normal lock
+    if (isBombType(piece.type)) {
+      const bombRow = piece.row + piece.tiles[0].row;
+      const bombCol = piece.col + piece.tiles[0].col;
+      const bombResult = explodeBomb(
+        state.board, bombRow, bombCol,
+        piece.type as 'BOMB_ROW' | 'BOMB_COL' | 'BOMB_3X3'
+      );
+      state.board = bombResult.board;
+      // Don't evaluate lines after bomb — explosion handles cleanup
+      state.activePiece = null;
+      state.canHold = true;
+      if (!spawnPiece()) {
+        state.phase = 'gameover';
+      }
+      return;
+    }
 
     // Detect T-spin BEFORE locking (check against board without this piece)
     const tSpin = detectTSpin(piece);

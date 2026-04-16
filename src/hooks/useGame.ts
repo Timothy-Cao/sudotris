@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { createGame, Game } from '../engine/game';
-import { drawBoard, drawNextPieces, drawHoldPiece, setShowNumbers } from '../renderer/canvas';
+import { drawBoard, drawNextPieces, drawHoldPiece, setRenderSettings } from '../renderer/canvas';
 import { Settings, GameState, InputAction, GamePhase } from '../engine/types';
 
 function getTodayDateStr(): string {
@@ -68,7 +68,7 @@ export function useGame(
       setGameState(state);
 
       // Update render settings
-      setShowNumbers(settingsRef.current.showNumbers);
+      setRenderSettings(settingsRef.current.showNumbers, settingsRef.current.ghostOpacity);
 
       // Draw board
       const canvas = canvasRef.current;

@@ -88,6 +88,11 @@ const L_SHAPES: ShapeOffsets[] = [
   [[2, 0], [2, 1], [1, 1], [0, 1]],
 ];
 
+// Bomb pieces: 1x1, all rotation states identical
+const BOMB_SHAPE: ShapeOffsets[] = [
+  [[0, 0]], [[0, 0]], [[0, 0]], [[0, 0]],
+];
+
 export const PIECE_SHAPES: Record<PieceType, ShapeOffsets[]> = {
   I: I_SHAPES,
   O: O_SHAPES,
@@ -96,7 +101,14 @@ export const PIECE_SHAPES: Record<PieceType, ShapeOffsets[]> = {
   Z: Z_SHAPES,
   J: J_SHAPES,
   L: L_SHAPES,
+  BOMB_ROW: BOMB_SHAPE,
+  BOMB_COL: BOMB_SHAPE,
+  BOMB_3X3: BOMB_SHAPE,
 };
+
+export function isBombType(type: PieceType): boolean {
+  return type === 'BOMB_ROW' || type === 'BOMB_COL' || type === 'BOMB_3X3';
+}
 
 // SRS kick data: offsets to try when rotation fails
 // Format: [dx (col), dy (row)] — positive dx = right, positive dy = up
@@ -148,7 +160,7 @@ export function getKicks(
 ): KickData {
   const key = `${from}>${to}`;
 
-  if (type === 'O') return [[0, 0]];
+  if (type === 'O' || isBombType(type)) return [[0, 0]];
 
   // Check if 180 rotation
   const is180 = (from === 0 && to === 2) || (from === 2 && to === 0) ||
@@ -164,11 +176,13 @@ export function getKicks(
 
 // Spawn column offset to center piece on 6-wide board
 export function getSpawnCol(type: PieceType): number {
+  if (isBombType(type)) return 3; // center-ish for 1x1
   return type === 'I' ? 1 : 1;
 }
 
 // Spawn row
 export function getSpawnRow(type: PieceType): number {
+  if (isBombType(type)) return 20; // 1x1 spawns at top of spawn zone
   if (type === 'I') return 18;
   return 19;
 }
