@@ -162,14 +162,28 @@ export function createGame(dateStr: string, settings: Settings, onEvent?: GameEv
       const newRow = piece.row + dy;
       if (isValidPosition(state.board, newShapeOffsets, newRow, newCol)) {
         const oldColors = piece.tiles.map(t => t.color);
-        const useIdentity = piece.type !== 'O';
-        const colorShift = useIdentity ? 0
-          : direction === 'cw' ? 1 : direction === 'ccw' ? 3 : 2;
         const n = piece.tiles.length;
+
+        // O, S, Z have identical shapes in some rotation states,
+        // so we must cycle colors to make rotation visible.
+        // I, T, J, L have unique shapes per state — index tracks physical tile.
+        const needsCycle = piece.type === 'O' || piece.type === 'S' || piece.type === 'Z';
+
+        let newColors: TileColor[];
+        if (!needsCycle) {
+          newColors = oldColors; // identity
+        } else if (direction === '180') {
+          // Reverse: top-left↔bottom-right, top-right↔bottom-left
+          newColors = [...oldColors].reverse();
+        } else {
+          // CW: shift 1, CCW: shift 3
+          const shift = direction === 'cw' ? 1 : 3;
+          newColors = oldColors.map((_, i) => oldColors[(i + shift) % n]);
+        }
 
         piece.tiles = newShapeOffsets.map((offset, i) => ({
           row: offset[0], col: offset[1],
-          color: oldColors[(i + colorShift) % n],
+          color: newColors[i],
         }));
         piece.rotation = to;
         piece.row = newRow;
