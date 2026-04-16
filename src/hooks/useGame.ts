@@ -1,9 +1,10 @@
 'use client';
 
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { createGame, Game } from '../engine/game';
+import { createGame, Game, GameEvent } from '../engine/game';
 import { drawBoard, drawNextPieces, drawHoldPiece, setRenderSettings } from '../renderer/canvas';
-import { Settings, GameState, InputAction, GamePhase } from '../engine/types';
+import { tickAnimations, hasActiveAnimations, animateLineClear, animateBombExplosion, animatePenaltyRow } from '../renderer/animations';
+import { Settings, GameState, InputAction } from '../engine/types';
 
 function getTodayDateStr(): string {
   const now = new Date();
@@ -38,10 +39,24 @@ export function useGame(
     keyMapRef.current = map;
   }, [settings.keyBindings]);
 
+  function handleGameEvent(event: GameEvent) {
+    switch (event.type) {
+      case 'lineClear':
+        animateLineClear(event.rows);
+        break;
+      case 'penalty':
+        animatePenaltyRow(event.rows);
+        break;
+      case 'bombExplode':
+        animateBombExplosion(event.row, event.col, event.bombType);
+        break;
+    }
+  }
+
   // Create game on mount
   useEffect(() => {
     const dateStr = getTodayDateStr();
-    gameRef.current = createGame(dateStr, settings);
+    gameRef.current = createGame(dateStr, settings, handleGameEvent);
     setGameState(gameRef.current.getState());
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -64,6 +79,7 @@ export function useGame(
       if (!game) return;
 
       game.tick(dt);
+      tickAnimations(dt);
       const state = game.getState();
       setGameState(state);
 
@@ -91,10 +107,9 @@ export function useGame(
         if (hctx) drawHoldPiece(hctx, state.holdPiece, state.canHold);
       }
 
-      if (state.phase === 'playing') {
+      if (state.phase === 'playing' || hasActiveAnimations()) {
         animFrameRef.current = requestAnimationFrame(loop);
       } else {
-        // One final draw
         setGameState(state);
       }
     }
@@ -171,7 +186,7 @@ export function useGame(
     }
     // Recreate game with same date seed
     const dateStr = getTodayDateStr();
-    gameRef.current = createGame(dateStr, settings);
+    gameRef.current = createGame(dateStr, settings, handleGameEvent);
     gameRef.current.start();
     startLoop();
   }, [settings, startLoop]);

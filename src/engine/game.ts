@@ -19,12 +19,19 @@ import {
 import { createRng, dateSeed, Rng } from './rng';
 import { createBoard, isValidPosition, lockPiece, evaluateLines, explodeBomb, getGhostRow } from './board';
 import { isBombType } from './pieces';
+
+export type GameEvent =
+  | { type: 'lineClear'; rows: number[] }
+  | { type: 'penalty'; rows: number[] }
+  | { type: 'bombExplode'; row: number; col: number; bombType: 'BOMB_ROW' | 'BOMB_COL' | 'BOMB_3X3' };
+
+export type GameEventHandler = (event: GameEvent) => void;
 import { createBag, Bag } from './bag';
 import { PIECE_SHAPES, getKicks, getSpawnCol, getSpawnRow } from './pieces';
 import { createScoreState, updateScore } from './scoring';
 import { createInputProcessor, InputProcessor } from './input';
 
-export function createGame(dateStr: string, settings: Settings) {
+export function createGame(dateStr: string, settings: Settings, onEvent?: GameEventHandler) {
   const seed = dateSeed(dateStr);
   const rng = createRng(seed);
   const bag = createBag(rng);
@@ -268,10 +275,9 @@ export function createGame(dateStr: string, settings: Settings) {
     if (isBombType(piece.type)) {
       const bombRow = piece.row + piece.tiles[0].row;
       const bombCol = piece.col + piece.tiles[0].col;
-      const bombResult = explodeBomb(
-        state.board, bombRow, bombCol,
-        piece.type as 'BOMB_ROW' | 'BOMB_COL' | 'BOMB_3X3'
-      );
+      const bt = piece.type as 'BOMB_ROW' | 'BOMB_COL' | 'BOMB_3X3';
+      onEvent?.({ type: 'bombExplode', row: bombRow, col: bombCol, bombType: bt });
+      const bombResult = explodeBomb(state.board, bombRow, bombCol, bt);
       state.board = bombResult.board;
       // Score tiles destroyed by bomb (+100 each)
       state.score = updateScore(state.score, 0, false, bombResult.cellsDestroyed);
@@ -301,6 +307,12 @@ export function createGame(dateStr: string, settings: Settings) {
 
     // Evaluate lines
     const result = evaluateLines(state.board, state.lockedRowCount);
+    if (result.clearedRowIndices.length > 0) {
+      onEvent?.({ type: 'lineClear', rows: result.clearedRowIndices });
+    }
+    if (result.penaltyRowIndices.length > 0) {
+      onEvent?.({ type: 'penalty', rows: result.penaltyRowIndices });
+    }
     state.board = result.board;
     state.lockedRowCount = result.lockedRowCount;
     state.score = updateScore(state.score, result.linesCleared, tSpin, result.tilesCleared);

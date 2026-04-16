@@ -3,10 +3,12 @@ import {
   TileColor,
   PieceType,
   BOARD_WIDTH,
+  BOARD_HEIGHT,
   VISIBLE_HEIGHT,
 } from '../engine/types';
 import { PIECE_SHAPES, isBombType } from '../engine/pieces';
 import { isGrayCell } from '../engine/board';
+import { drawAnimations } from './animations';
 import {
   TILE_COLORS,
   TILE_BORDER_COLORS,
@@ -75,12 +77,6 @@ function drawTileAt(
   ctx.globalAlpha = 1;
 }
 
-const BOMB_EMOJIS: Record<string, string> = {
-  BOMB_ROW: '💥',   // horizontal explosion
-  BOMB_COL: '🧨',   // vertical explosion
-  BOMB_3X3: '💣',   // area explosion
-};
-
 function drawBombAt(
   ctx: CanvasRenderingContext2D,
   canvasX: number,
@@ -90,20 +86,73 @@ function drawBombAt(
   alpha: number = 1
 ): void {
   ctx.globalAlpha = alpha;
+  const cx = canvasX + size / 2;
+  const cy = canvasY + size / 2;
+  const pad = 4;
 
-  // Dark background
-  ctx.fillStyle = '#1a0a0a';
+  // Background
+  ctx.fillStyle = '#1a0808';
   ctx.fillRect(canvasX + 1, canvasY + 1, size - 2, size - 2);
-  ctx.strokeStyle = '#FF4444';
+
+  // Border — color hints at type
+  const borderColor = bombType === 'BOMB_ROW' ? '#FF6633'
+    : bombType === 'BOMB_COL' ? '#33AAFF'
+    : '#FFCC00';
+  ctx.strokeStyle = borderColor;
   ctx.lineWidth = 2;
   ctx.strokeRect(canvasX + 1, canvasY + 1, size - 2, size - 2);
 
-  // Emoji
-  const emoji = BOMB_EMOJIS[bombType] || '💣';
-  ctx.font = `${Math.floor(size * 0.6)}px serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(emoji, canvasX + size / 2, canvasY + size / 2);
+  // Inner icon showing blast shape
+  ctx.strokeStyle = borderColor;
+  ctx.fillStyle = borderColor;
+  ctx.lineWidth = 3;
+
+  if (bombType === 'BOMB_ROW') {
+    // Horizontal arrow/line
+    ctx.beginPath();
+    ctx.moveTo(canvasX + pad, cy);
+    ctx.lineTo(canvasX + size - pad, cy);
+    ctx.stroke();
+    // Arrow heads
+    ctx.beginPath();
+    ctx.moveTo(canvasX + pad, cy);
+    ctx.lineTo(canvasX + pad + 6, cy - 4);
+    ctx.lineTo(canvasX + pad + 6, cy + 4);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(canvasX + size - pad, cy);
+    ctx.lineTo(canvasX + size - pad - 6, cy - 4);
+    ctx.lineTo(canvasX + size - pad - 6, cy + 4);
+    ctx.fill();
+  } else if (bombType === 'BOMB_COL') {
+    // Vertical arrow/line
+    ctx.beginPath();
+    ctx.moveTo(cx, canvasY + pad);
+    ctx.lineTo(cx, canvasY + size - pad);
+    ctx.stroke();
+    // Arrow heads
+    ctx.beginPath();
+    ctx.moveTo(cx, canvasY + pad);
+    ctx.lineTo(cx - 4, canvasY + pad + 6);
+    ctx.lineTo(cx + 4, canvasY + pad + 6);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(cx, canvasY + size - pad);
+    ctx.lineTo(cx - 4, canvasY + size - pad - 6);
+    ctx.lineTo(cx + 4, canvasY + size - pad - 6);
+    ctx.fill();
+  } else {
+    // 3x3 square outline
+    const sqSize = size * 0.55;
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(cx - sqSize / 2, cy - sqSize / 2, sqSize, sqSize);
+    // Cross-hair dot in center
+    ctx.fillStyle = borderColor;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   ctx.globalAlpha = 1;
 }
@@ -164,6 +213,51 @@ export function drawBoard(ctx: CanvasRenderingContext2D, state: GameState): void
     }
   }
 
+  // Draw bomb blast zone shadow (at ghost position)
+  if (activePiece && ghostRow !== null && isBombType(activePiece.type)) {
+    const bombRow = ghostRow + activePiece.tiles[0].row;
+    const bombCol = activePiece.col + activePiece.tiles[0].col;
+    const bombType = activePiece.type;
+
+    const blastColor = bombType === 'BOMB_ROW' ? 'rgba(255, 100, 50, 0.15)'
+      : bombType === 'BOMB_COL' ? 'rgba(50, 170, 255, 0.15)'
+      : 'rgba(255, 200, 0, 0.15)';
+    const blastBorder = bombType === 'BOMB_ROW' ? 'rgba(255, 100, 50, 0.35)'
+      : bombType === 'BOMB_COL' ? 'rgba(50, 170, 255, 0.35)'
+      : 'rgba(255, 200, 0, 0.35)';
+
+    ctx.fillStyle = blastColor;
+    ctx.strokeStyle = blastBorder;
+    ctx.lineWidth = 1;
+
+    if (bombType === 'BOMB_ROW') {
+      for (let c = 0; c < BOARD_WIDTH; c++) {
+        const cy = boardRowToCanvasY(bombRow);
+        ctx.fillRect(c * CELL_SIZE, cy, CELL_SIZE, CELL_SIZE);
+        ctx.strokeRect(c * CELL_SIZE + 0.5, cy + 0.5, CELL_SIZE - 1, CELL_SIZE - 1);
+      }
+    } else if (bombType === 'BOMB_COL') {
+      for (let r = 0; r < BOARD_HEIGHT; r++) {
+        if (r >= TOTAL_VISIBLE_ROWS) continue;
+        const cy = boardRowToCanvasY(r);
+        ctx.fillRect(bombCol * CELL_SIZE, cy, CELL_SIZE, CELL_SIZE);
+        ctx.strokeRect(bombCol * CELL_SIZE + 0.5, cy + 0.5, CELL_SIZE - 1, CELL_SIZE - 1);
+      }
+    } else {
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          const r = bombRow + dr;
+          const c = bombCol + dc;
+          if (r >= 0 && r < TOTAL_VISIBLE_ROWS && c >= 0 && c < BOARD_WIDTH) {
+            const cy = boardRowToCanvasY(r);
+            ctx.fillRect(c * CELL_SIZE, cy, CELL_SIZE, CELL_SIZE);
+            ctx.strokeRect(c * CELL_SIZE + 0.5, cy + 0.5, CELL_SIZE - 1, CELL_SIZE - 1);
+          }
+        }
+      }
+    }
+  }
+
   // Draw ghost piece
   if (activePiece && ghostRow !== null && ghostRow !== activePiece.row) {
     const isBomb = isBombType(activePiece.type);
@@ -199,6 +293,9 @@ export function drawBoard(ctx: CanvasRenderingContext2D, state: GameState): void
       }
     }
   }
+
+  // Draw animations on top of everything
+  drawAnimations(ctx);
 }
 
 // Draw next pieces preview (up to 3)
